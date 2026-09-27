@@ -4,7 +4,8 @@ from typing import Optional
 import pandas as pd
 
 from ..db import get_session
-from ..models import Store, Upload, HourlyData
+from ..dependencies import get_current_store
+from ..models import Store, Upload, HourlyData, StoreUser
 from datetime import date, timedelta
 from sqlalchemy import func
 
@@ -56,6 +57,7 @@ router = APIRouter(prefix="/api", tags=["dashboard"])
 async def upload(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
+    user: StoreUser = Depends(get_current_store),
 ):
     if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(400, "Only .xlsx or .xls files are accepted")
@@ -68,18 +70,16 @@ async def upload(
     if df.empty:
         raise HTTPException(400, "No valid rows found")
 
-    # 1. Upsert stores
-    store_codes = sorted(df["store_id"].unique().tolist())
-    existing = {
-        s.code: s
-        for s in session.exec(select(Store).where(Store.code.in_(store_codes))).all()
-    }
-    for code in store_codes:
-        if code not in existing:
-            s = Store(code=code, name=code)
-            session.add(s)
-            session.flush()
-            existing[code] = s
+    if not user.store_id:
+        raise HTTPException(403, "User is not linked to a store")
+
+    # A store user can only upload for their own store.
+    df = df[df["store_id"] == user.store.code]
+    if df.empty:
+        raise HTTPException(400, "File contains no rows for your store")
+
+    # 1. Store already exists (it's this user's store), no upsert needed.
+    store = user.store
 
     # 2. Register upload
     upload = Upload(filename=file.filename, rows=len(df))
@@ -90,7 +90,7 @@ async def upload(
     records = df.to_dict(orient="records")
     session.add_all([
         HourlyData(
-            store_id=existing[r["store_id"]].id,
+            store_id=store.id,
             upload_id=upload.id,
             date=r["date"],
             hour=int(r["hour"]),
@@ -105,7 +105,7 @@ async def upload(
     return UploadResponse(
         upload_id=upload.id,
         rows=len(records),
-        stores=store_codes,
+        stores=[store.code],
         date_range=[df["date"].min(), df["date"].max()],
     )
 
@@ -143,16 +143,17 @@ def _load_df(
 
 @router.get("/dashboard", response_model=DashboardResponse)
 def get_dashboard(
-    store_id: Optional[str] = Query(None),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     session: Session = Depends(get_session),
+    user: StoreUser = Depends(get_current_store),
 ):
-    df = _load_df(session, store_id, start_date, end_date)
+    store_code = user.store.code
+    df = _load_df(session, store_code, start_date, end_date)
     if df.empty:
         raise HTTPException(404, "No data for the given filters")
 
-    partial_date = _partial_date(session, store_id, df)
+    partial_date = _partial_date(session, store_code, df)
     period = _period(df, partial_date)
     title = f"Summary for {period.label}"
 
@@ -164,8 +165,8 @@ def get_dashboard(
         insights=generate_insights(df, partial_date),
         whatsapp=whatsapp_summary(df, title, partial_date),
         period=period,
-        data_through=_data_through(session, store_id),
-        compare=_compare(session, store_id, df, period),
+        data_through=_data_through(session, store_code),
+        compare=_compare(session, store_code, df, period),
     )
 
 
@@ -236,9 +237,11 @@ def _compare(
 
 
 @router.get("/stores", response_model=list[StoreOut])
-def list_stores(session: Session = Depends(get_session)):
-    stores = session.exec(select(Store).order_by(Store.code)).all()
-    return [StoreOut(code=s.code, name=s.name) for s in stores]
+def list_stores(
+    session: Session = Depends(get_session),
+    user: StoreUser = Depends(get_current_store),
+):
+    return [StoreOut(code=user.store.code, name=user.store.name)]
 
 
 @router.get("/health")
