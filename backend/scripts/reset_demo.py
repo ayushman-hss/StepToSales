@@ -39,8 +39,21 @@ from app.services.associations import (
 from app.services.pooling import to_paise
 from app.services.bundles import generate_suggestions
 
+from app.models import (
+    Store, Upload, HourlyData, SaleLine, Product, BundleSuggestion, StoreUser,
+)
+from app.services.auth import hash_password
+
 import generate_bundle_sample
 import generate_sample
+
+#: Demo logins. Passwords are deliberately not the store code itself --
+#: S1/s1shop reads like a real credential, S1/S1 does not.
+DEMO_CREDENTIALS = {
+    "S1": "s1shop",
+    "S2": "s2shop",
+    "S3": "s3shop",
+}
 
 BASE = Path(__file__).resolve().parents[1]
 STORES = ["S1", "S2"]
@@ -245,10 +258,30 @@ def load_pools(session: Session) -> None:
     print(f"      {len(SUPPLIERS)} suppliers, {len(pooled_skus)} products "
           f"with tiered pricing, {placed} seed orders")
 
+def load_users(session: Session) -> None:
+    """Wipe and recreate demo logins.
+
+    Sessions are transient and are created on login, so only StoreUser rows
+    need seeding. Every store listed in DEMO_CREDENTIALS gets one; a store
+    that appears in POOL_ONLY_STORES (S3) still gets a login so you can sign
+    in as it to see the pool from its side.
+    """
+    session.execute(sa_delete(StoreUser))
+    session.commit()
+
+    created = []
+    for code, password in DEMO_CREDENTIALS.items():
+        store = get_store(session, code)
+        session.add(StoreUser(
+            store_id=store.id,
+            username=code,
+            password_hash=hash_password(password),
+        ))
+        created.append(f"{code}/{password}")
+    session.commit()
+    print(f"  users            : {len(created)} ({', '.join(created)})")
 
 def main() -> None:
-    # Regenerate first, from one shared clock, so the data always ends now
-    # and "today" stops at the same minute in the sale lines and hourly files.
     print("Regenerating demo data up to the current hour...")
     now = generate_bundle_sample.main()
     generate_sample.main(now)
@@ -259,6 +292,7 @@ def main() -> None:
         for code in STORES:
             load_store(session, code)
         load_pools(session)
+        load_users(session)   # ← new
         print("Done.")
 
 
