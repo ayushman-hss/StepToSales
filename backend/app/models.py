@@ -8,6 +8,21 @@ class Store(SQLModel, table=True):
     code: str = Field(index=True, unique=True)   # "S1", "S2"
     name: str = ""
 
+class StoreUser(SQLModel, table=True):
+    __tablename__ = "store_user"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    store_id: int = Field(foreign_key="store.id", index=True)
+    username: str = Field(index=True, unique=True)
+    password_hash: str
+
+
+class Session(SQLModel, table=True):
+    __tablename__ = "session"
+    token: str = Field(primary_key=True)
+    store_id: int = Field(foreign_key="store.id", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    expires_at: datetime
+
 class Upload(SQLModel, table=True):
     __tablename__ = "upload"
     id: Optional[int] = Field(default=None, primary_key=True)
