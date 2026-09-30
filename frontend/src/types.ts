@@ -201,6 +201,10 @@ export interface LiveBlock {
   projected_sales: number | null;
   typical_sales: number;
   alert: string | null;
+  /** The shop clock as hours since midnight (14.5 = 14:30); the line ends here. */
+  clock_hour: number | null;
+  /** Today's sales up to the shop clock, the hour in progress included. */
+  sales_so_far: number;
 }
 
 export type LiveSpeed = 0 | 1 | 10 | 60 | 300;

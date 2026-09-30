@@ -18,7 +18,7 @@ only, so a half-finished day never lowers the baseline:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 import pandas as pd
 
@@ -67,6 +67,11 @@ class LiveView:
     projected_sales: float | None
     typical_sales: float
     alert: str | None
+    #: Where "now" sits on the day, in hours since midnight (14.5 = 14:30),
+    #: so the chart's line can end at the shop clock instead of an hour mark.
+    clock_hour: float | None = None
+    #: Today's sales up to that moment, the in-progress hour included.
+    sales_so_far: float = 0.0
 
 
 def _per_date_hour(df: pd.DataFrame) -> pd.DataFrame:
@@ -82,8 +87,17 @@ def _grid(per: pd.DataFrame, column: str) -> pd.DataFrame:
     return g.reindex(columns=range(24), fill_value=0)
 
 
-def live_view(history: pd.DataFrame, today_df: pd.DataFrame, today: date) -> LiveView | None:
-    """``history``: rows for complete past days; ``today_df``: today's rows so far."""
+def live_view(
+    history: pd.DataFrame,
+    today_df: pd.DataFrame,
+    today: date,
+    clock: datetime | None = None,
+) -> LiveView | None:
+    """``history``: rows for complete past days; ``today_df``: today's rows so far.
+
+    ``clock`` is the shop's current time; without it "now" is the end of the
+    latest hour that has data.
+    """
     if history.empty or today_df.empty:
         return None
     hist = _per_date_hour(history)
@@ -136,6 +150,8 @@ def live_view(history: pd.DataFrame, today_df: pd.DataFrame, today: date) -> Liv
     )
 
     return LiveView(
+        clock_hour=_clock_hour(clock, today, current),
+        sales_so_far=round(float(today_cum[23]), 2),
         weekday=WEEKDAYS[today.weekday()],
         days_compared=int(days),
         band=band,
@@ -146,6 +162,18 @@ def live_view(history: pd.DataFrame, today_df: pd.DataFrame, today: date) -> Liv
         typical_sales=round(typical_total, 2),
         alert=conversion_alert(now_df, hist, current),
     )
+
+
+def _clock_hour(clock: datetime | None, today: date, current: int) -> float:
+    """Hours since midnight at the shop clock, never behind the data."""
+    if clock is None or clock.date() < today:
+        return float(current + 1)
+    if clock.date() > today:
+        return 24.0
+    at = clock.hour + clock.minute / 60 + clock.second / 3600
+    # Data already recorded for a later hour (an uploaded full day, say):
+    # "now" is the end of that hour, not somewhere behind it.
+    return round(at if int(at) >= current else float(current + 1), 4)
 
 
 def conversion_alert(now_df: pd.DataFrame, hist: pd.DataFrame, current: int) -> str | None:

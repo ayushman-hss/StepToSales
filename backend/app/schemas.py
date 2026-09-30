@@ -93,6 +93,8 @@ class LiveBlock(BaseModel):
     projected_sales: Optional[float] = None
     typical_sales: float
     alert: Optional[str] = None
+    clock_hour: Optional[float] = None
+    sales_so_far: float = 0.0
 
 
 class DashboardResponse(BaseModel):
@@ -140,4 +142,4 @@ class BundleSuggestionOut(BaseModel):
 
 
 class BundleActionIn(BaseModel):
-    price: Optional[float] = None
+    price: Optional[float] = None

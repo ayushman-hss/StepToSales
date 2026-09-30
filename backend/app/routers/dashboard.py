@@ -7,7 +7,7 @@ from ..db import get_session
 from ..dependencies import get_current_store
 from ..models import Store, Upload, HourlyData
 from dataclasses import asdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from sqlalchemy import func
 
 from ..live import runner
@@ -170,7 +170,7 @@ def get_dashboard(
         period=period,
         data_through=_data_through(session, store_code),
         compare=_compare(session, store_code, df, period),
-        live=_live(session, store_code, df, period, runner.shop_now(store_code).date()),
+        live=_live(session, store_code, df, period, runner.shop_now(store_code)),
     )
 
 
@@ -183,9 +183,10 @@ def _live(
     store_code: str,
     df: pd.DataFrame,
     period: Period,
-    today: date,
+    clock: datetime,
 ) -> Optional[LiveBlock]:
     """Pace, band and the hour in progress -- only when the range is today."""
+    today = clock.date()
     if period.start != period.end or period.end != today.isoformat():
         return None
     history = _load_df(
@@ -193,7 +194,7 @@ def _live(
         (today - timedelta(days=LIVE_HISTORY_DAYS)).isoformat(),
         (today - timedelta(days=1)).isoformat(),
     )
-    view = live_view(history, df, today)
+    view = live_view(history, df, today, clock)
     return LiveBlock.model_validate(asdict(view)) if view else None
 
 
@@ -271,4 +272,4 @@ def list_stores(store: Store = Depends(get_current_store)):
 @router.get("/health")
 def health(session: Session = Depends(get_session)):
     has_data = session.exec(select(HourlyData).limit(1)).first() is not None
-    return {"ok": True, "has_data": has_data}
+    return {"ok": True, "has_data": has_data}
