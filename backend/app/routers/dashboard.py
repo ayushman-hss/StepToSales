@@ -6,10 +6,15 @@ import pandas as pd
 from ..db import get_session
 from ..dependencies import get_current_store
 from ..models import Store, Upload, HourlyData
+from dataclasses import asdict
 from datetime import date, timedelta
 from sqlalchemy import func
 
-from ..schemas import Comparison, DashboardResponse, Period, UploadResponse, StoreOut
+from ..live import runner
+from ..schemas import (
+    Comparison, DashboardResponse, LiveBlock, Period, StoreOut, UploadResponse,
+)
+from ..services.live.pace import live_view
 from ..services.parser import parse_excel
 from ..services.insights import generate_insights, whatsapp_summary
 from ..services.metrics import (
@@ -165,7 +170,31 @@ def get_dashboard(
         period=period,
         data_through=_data_through(session, store_code),
         compare=_compare(session, store_code, df, period),
+        live=_live(session, store_code, df, period, runner.shop_now(store_code).date()),
     )
+
+
+#: How far back "a usual Wednesday" looks.
+LIVE_HISTORY_DAYS = 56
+
+
+def _live(
+    session: Session,
+    store_code: str,
+    df: pd.DataFrame,
+    period: Period,
+    today: date,
+) -> Optional[LiveBlock]:
+    """Pace, band and the hour in progress -- only when the range is today."""
+    if period.start != period.end or period.end != today.isoformat():
+        return None
+    history = _load_df(
+        session, store_code,
+        (today - timedelta(days=LIVE_HISTORY_DAYS)).isoformat(),
+        (today - timedelta(days=1)).isoformat(),
+    )
+    view = live_view(history, df, today)
+    return LiveBlock.model_validate(asdict(view)) if view else None
 
 
 def _partial_date(

@@ -59,6 +59,8 @@ export interface DashboardData {
   /** Latest date and hour held for this shop, e.g. "2026-09-21T20". */
   data_through: string | null;
   compare: Comparison | null;
+  /** Pace, band and the hour in progress; only when the range is today. */
+  live: LiveBlock | null;
 }
 
 export interface Store {
@@ -163,4 +165,62 @@ export interface PoolEvent {
   kind: string;
   detail: string;
   created_at: string;
+}
+
+// ---- live mode ----------------------------------------------------------
+
+/** Cumulative sales by the end of an hour: the usual corridor, and today. */
+export interface LiveBandPoint {
+  hour: number;
+  p10: number;
+  p50: number;
+  p90: number;
+  /** Today; null for hours that have not happened yet. */
+  actual: number | null;
+}
+
+export interface LiveHourNow {
+  hour: number;
+  footfall: number;
+  transactions: number;
+  sales: number;
+  usual_footfall: number;
+  usual_transactions: number;
+  usual_sales: number;
+}
+
+/** Today against the same weekday in past weeks. Only present for today. */
+export interface LiveBlock {
+  weekday: string;
+  days_compared: number;
+  band: LiveBandPoint[];
+  now: LiveHourNow | null;
+  /** 0.18 = 18% ahead of the usual sales by the last finished hour. */
+  pace: number | null;
+  pace_through_hour: number | null;
+  projected_sales: number | null;
+  typical_sales: number;
+  alert: string | null;
+}
+
+export type LiveSpeed = 0 | 1 | 10 | 60 | 300;
+
+export interface LiveStatus {
+  running: boolean;
+  speed: LiveSpeed;
+  shop_time: string;
+  real_time: string;
+  minutes_ahead: number;
+  last_event_at: string | null;
+  last_bill_at: string | null;
+  bills_today: number;
+  visitors_today: number;
+}
+
+export interface RecentBill {
+  at: string;
+  source: 'sim' | 'pos';
+  amount_paise: number;
+  items: number;
+  lines: { sku: string; name: string; qty: number; unit_price_paise: number }[];
 }

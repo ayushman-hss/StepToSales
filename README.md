@@ -807,6 +807,50 @@ routes.
 
 ---
 
+## 7. Live mode
+
+While the API runs, every shop with history keeps trading in the background:
+visitors arrive, some buy, and the dashboard's **Today** view refreshes every
+few seconds. Nothing to start separately.
+
+- **The simulator learns from the shop's own history.** Visitors per weekday
+  and hour, the chance of buying in each hour, and whole baskets at the prices
+  actually paid all come from the last 8 weeks. So today lands inside the
+  usual range for that weekday, and bundle suggestions keep seeing the same
+  pairings.
+- **Speed control on the dashboard**: Pause, Real time, 10×, 60×, 300×.
+  Fast-forward runs the shop's clock ahead of real time and stops at
+  midnight. Back at Real time, the shop waits for the real clock to catch up.
+- **Till** (`/pos`): log in on a phone as the same shop, tap products, ring
+  up. The bill is priced from that shop's price list and appears on the
+  dashboard within seconds. Every bill also counts one visitor.
+- **How today is going**: pace against a usual weekday (finished hours only),
+  likely takings by closing, the hour in progress, and a band showing the
+  usual range of cumulative sales. An alert appears when far fewer visitors
+  than usual bought in the last hour.
+- **It still reconciles.** Every event is stored once in `live_event`
+  (retries are ignored by `event_id`). The live rows in `hourly_data` and
+  `sale_line` are recomputed from those events, so all three agree to the
+  paisa.
+- **Times are IST**, whatever the server's own timezone.
+- **After downtime** (a restart or a redeploy), each shop catches up from
+  where its data ends, up to 7 days back.
+
+Settings (in `backend/.env`):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LIVE_SIMULATOR` | `true` | Run the background simulator. Run it in **one** API process only. |
+| `LIVE_SEED` | `steptosales` | Same seed, same sequence of simulated events. |
+| `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated origins, for a separately hosted frontend. |
+
+To use the till from a phone on the same Wi-Fi, run `npm run dev -- --host`
+and open the address Vite prints for your network.
+
+`reset_demo.py` also clears live events. Restart the API after running it.
+
+---
+
 # Testing
 
 Run the backend test suite with:
