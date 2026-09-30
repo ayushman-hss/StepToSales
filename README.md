@@ -15,7 +15,7 @@ For a small shop, that question can mean very different things:
 
 StepToSale turns ordinary retail data into actionable answers across all three.
 
-Built with **FastAPI + PostgreSQL** on the backend and **React + TypeScript + Vite** on the frontend.
+Built with **Python + FastAPI + PostgreSQL** on the backend and **React + TypeScript + Vite** on the frontend.
 
 ---
 
@@ -849,92 +849,6 @@ and open the address Vite prints for your network.
 
 `reset_demo.py` also clears live events. Restart the API after running it.
 
-## 8. Phone alerts (Telegram)
-
-The API watches every shop's day and messages its phone when something is
-worth knowing:
-
-- **Slow hour**: in the hour that just ended, far fewer people came in than
-  usual (60% or less), or far fewer of them bought (under 60% of the usual
-  share, with at least 8 visitors). Says which, because the fixes differ.
-- **Busy hour**: the hour took at least 1.5× its usual, with 5 or more bills.
-- **Behind pace** / **Strong day**: the day is 25% behind or 20% ahead of a
-  usual weekday, once a quarter of a usual day's takings should be in. Once a
-  day each.
-- **Day's summary**: after the shop's usual closing time: takings against a
-  usual day, bills and visitors, the best hour.
-- **Hourly updates** (opt-in per chat): a short line after every trading
-  hour, with the day so far.
-
-At most one hourly message per hour. An ordinary day stays quiet on purpose.
-
-Every alert is listed on the **Phone alerts** page (`/alerts`, linked from the
-live strip on the dashboard), sent or not. With a Telegram bot set up, each
-one is also sent to every chat connected to that shop.
-
-**Seeing it in a demo.** The live strip has a **Demo day** switch: *Usual*,
-*Slow* (half the visitors, under half the buying) or *Busy* (1.7× visitors,
-more buying). Pick Slow or Busy, then 60×: the next hour that ends sends a
-Slow hour or Busy hour alert, about a minute later.
-
-**Set up the bot (once, about two minutes):**
-
-1. In Telegram, message **@BotFather**, send `/newbot`, and pick a name and a
-   username ending in `bot`.
-2. Put the token it gives you in `backend/.env`:
-
-   ```text
-   TELEGRAM_BOT_TOKEN=123456789:AA...
-   ```
-
-3. Restart the backend (or run `start.bat` again).
-
-**Connect a phone:** log in as the shop, open **Phone alerts**, tap **Connect
-Telegram** and press **Start** in the chat that opens. On another phone, send
-the bot the `/start <code>` shown on the page; the code works once, for 15
-minutes. A group works too: add the bot to the group and send the same
-`/start <code>` there. In the chat:
-
-- `/status`: how today is going, right now, and the last hour.
-- `/hourly`: hourly updates on or off (also a tick box on the page).
-- `/stop`: stop alerts to that chat.
-- `/help`: the list. Typing `/` in the chat shows the same menu.
-
-**Ask it anything, in plain words.** Any message that isn't a command is a
-question about the shop, answered from its own data. The same assistant is on
-the Phone alerts page (*Ask about your shop*), so it can be tried without
-Telegram. It understands English and everyday Hinglish, for example:
-
-- *How much did I sell today?* / *aaj kitna becha* / *kal ki sale*
-- *What sold most this week?* / *which products are not selling?*
-- *How many people came in yesterday evening?* / *sales between 5 and 8 pm*
-- *How many Maggi today?* / *paneer vs butter this week* / *price of tea*
-- *Compare today with yesterday* / *how are sales compared to last week?*
-- *Busiest hour?* / *which day is slow?* / *when should I run an offer?*
-- *Profit last week* / *average bill yesterday* / *biggest bill today*
-- *How can I improve sales?* (tips built from the shop's own numbers)
-
-Periods it knows: today, yesterday, a weekday, a date (*25 Sept*, *25/9*), a
-month name, this/last week or month, *last 7 days*; and parts of the day
-(morning, evening, *at 6pm*, *between 10 and 12*). Every figure is compared
-like with like: today so far against a usual same weekday *by the same time*,
-a week against the week before.
-
-It is rule-based and runs entirely on the server (`services/assistant/`):
-no AI service is called, so neither the questions nor the shop's figures
-leave it, and it costs nothing to run. The trade-off is that an unusual
-wording gets a list of example questions instead of an answer.
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `TELEGRAM_BOT_TOKEN` | *(empty)* | From @BotFather. Empty: alerts are listed on the page but not sent. |
-| `ALERTS_ENABLED` | `true` | Run the alert watcher. Like the simulator, in **one** API process only. |
-
-A bot can only be read by one running copy of the app. If the laptop and a
-hosted copy both use the same token, the page shows a warning; give each its
-own bot. `reset_demo.py` clears the alert list (so the day raises them again)
-but keeps connected chats.
-
 ---
 
 # Testing
@@ -994,8 +908,7 @@ The current interface focuses on one active pool for simplicity.
 
 ### Notifications
 
-Shops get Telegram alerts about their day (see *Phone alerts* above). Group
-buying does not use them yet: the pool event log records events such as:
+The event log records events such as:
 
 ```text
 pool crossed a tier
@@ -1027,7 +940,7 @@ Potential next steps include:
 - Promotion-aware demand simulation
 - Supplier-facing portal
 - Multi-pool management
-- Group-buying notifications
+- Notifications
 - Optimistic concurrency control
 - Real POS integrations
 - Real supplier integrations
@@ -1068,4 +981,4 @@ The project therefore moves from:
 
 # License
 
-MIT
+MIT
