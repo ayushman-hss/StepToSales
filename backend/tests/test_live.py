@@ -343,6 +343,22 @@ def test_band_shows_today_only_up_to_now():
     assert view.band[20].p50 == pytest.approx(13 * 150)
 
 
+def test_now_sits_at_the_shop_clock_with_everything_sold_so_far():
+    at = datetime.combine(TODAY, datetime.min.time()) + timedelta(hours=12, minutes=30)
+    view = live_view(_history_frame(), _today_frame(range(8, 13), 150.0), TODAY, at)
+    assert view.clock_hour == pytest.approx(12.5)
+    assert view.sales_so_far == pytest.approx(5 * 150)   # 12:00 hour included
+
+
+def test_now_is_never_behind_the_data():
+    early = datetime.combine(TODAY, datetime.min.time()) + timedelta(hours=9)
+    view = live_view(_history_frame(), _today_frame(range(8, 13), 150.0), TODAY, early)
+    assert view.clock_hour == pytest.approx(13)
+    assert live_view(_history_frame(), _today_frame(range(8, 11), 150.0), TODAY).clock_hour == 11
+    tomorrow = datetime.combine(TODAY + timedelta(days=1), datetime.min.time())
+    assert live_view(_history_frame(), _today_frame([8], 1.0), TODAY, tomorrow).clock_hour == 24
+
+
 def test_band_needs_enough_past_weekdays():
     assert live_view(_history_frame(weeks=2), _today_frame([9], 150.0), TODAY) is None
 
