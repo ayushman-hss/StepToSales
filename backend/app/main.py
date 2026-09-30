@@ -6,7 +6,7 @@ from .config import settings
 from .db import init_db
 from .alerts import alerts
 from .live import runner
-from .routers import alerts as alerts_router, auth, dashboard, live, products, bundles, pools
+from .routers import alerts as alerts_router, assistant, auth, dashboard, live, products, bundles, pools
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -40,6 +40,7 @@ app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(live.router)
 app.include_router(alerts_router.router)
+app.include_router(assistant.router)
 app.include_router(products.router)
 app.include_router(bundles.router)
 app.include_router(pools.router)

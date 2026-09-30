@@ -900,6 +900,31 @@ minutes. A group works too: add the bot to the group and send the same
 - `/stop`: stop alerts to that chat.
 - `/help`: the list. Typing `/` in the chat shows the same menu.
 
+**Ask it anything, in plain words.** Any message that isn't a command is a
+question about the shop, answered from its own data. The same assistant is on
+the Phone alerts page (*Ask about your shop*), so it can be tried without
+Telegram. It understands English and everyday Hinglish, for example:
+
+- *How much did I sell today?* / *aaj kitna becha* / *kal ki sale*
+- *What sold most this week?* / *which products are not selling?*
+- *How many people came in yesterday evening?* / *sales between 5 and 8 pm*
+- *How many Maggi today?* / *paneer vs butter this week* / *price of tea*
+- *Compare today with yesterday* / *how are sales compared to last week?*
+- *Busiest hour?* / *which day is slow?* / *when should I run an offer?*
+- *Profit last week* / *average bill yesterday* / *biggest bill today*
+- *How can I improve sales?* (tips built from the shop's own numbers)
+
+Periods it knows: today, yesterday, a weekday, a date (*25 Sept*, *25/9*), a
+month name, this/last week or month, *last 7 days*; and parts of the day
+(morning, evening, *at 6pm*, *between 10 and 12*). Every figure is compared
+like with like: today so far against a usual same weekday *by the same time*,
+a week against the week before.
+
+It is rule-based and runs entirely on the server (`services/assistant/`):
+no AI service is called, so neither the questions nor the shop's figures
+leave it, and it costs nothing to run. The trade-off is that an unusual
+wording gets a list of example questions instead of an answer.
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | *(empty)* | From @BotFather. Empty: alerts are listed on the page but not sent. |

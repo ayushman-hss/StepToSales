@@ -10,6 +10,7 @@ import {
 import { useCurrentStore } from '../auth';
 import type { AlertKind, AlertsOverview, TelegramLink } from '../types';
 import { Badge, Button, EmptyState, Notice, PageHeader, Section } from '../lib/ui/controls';
+import { AskBox } from '../components/AskBox';
 
 const REFRESH_MS = 4000;
 
@@ -141,7 +142,7 @@ export function AlertsPage() {
   return (
     <div>
       <PageHeader
-        title="Phone alerts"
+        title="Phone alerts & questions"
         lead="A Telegram message when an hour is slow or busy, when the day is well behind or ahead of a usual one, and a summary after closing."
       />
 
@@ -253,6 +254,8 @@ export function AlertsPage() {
             </div>
           )}
         </Section>
+
+        <AskBox />
 
         <Section title="What gets sent">
           <ul className="space-y-1.5 text-body text-ink">

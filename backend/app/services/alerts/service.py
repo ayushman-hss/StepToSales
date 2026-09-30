@@ -29,6 +29,7 @@ from ...models import AlertChat, AlertLinkCode, AlertSent, Store, utc_now
 from ..live.clock import ist_now
 from ..live.runner import CATCH_UP_AFTER
 from ..live.today import today_view
+from ..assistant.answers import answer as ask_shop
 from .rules import HOURLY, Alert, clock_hour, due_alerts, status_text
 from .telegram import TelegramClient, TelegramConflict, TelegramError
 
@@ -47,6 +48,8 @@ WHAT_YOU_GET = (
 )
 
 COMMANDS_HELP = (
+    "Ask me anything about the shop in your own words, like \"how much did I sell "
+    "today?\", \"what sold most this week?\" or \"how can I improve sales?\"\n\n"
     "/status - how today is going right now\n"
     "/hourly - a short update after every hour (send again to turn off)\n"
     "/stop - stop sending alerts to this chat\n"
@@ -308,12 +311,34 @@ class AlertService:
                 session.commit()
                 reply = ("Done. This chat won't get alerts any more." if rows
                          else "This chat wasn't getting alerts.")
-            else:
+            elif command.startswith("/"):
                 reply = HELP
+            else:
+                reply = self._ask(session, int(chat["id"]), text)
 
         if self.client is not None:
             self.client.send_message(int(chat["id"]), reply)
         return reply
+
+    def _ask(self, session: Session, chat_id: int, text: str) -> str:
+        """A question in plain words, answered for the shop(s) this chat follows."""
+        stores = session.exec(
+            select(Store)
+            .join(AlertChat, AlertChat.store_id == Store.id)
+            .where(AlertChat.chat_id == chat_id)
+            .order_by(Store.code)
+        ).all()
+        if not stores:
+            return "This chat isn't connected to a shop yet.\n\n" + HELP
+        parts = []
+        for store in stores:
+            clock = self.shop_clock(store.code) or ist_now()
+            reply = ask_shop(
+                session, store, text, clock,
+                set_hourly=lambda on: self._toggle_hourly(session, chat_id, "on" if on else "off"),
+            )
+            parts.append(f"{_heading(store)}\n{reply}" if len(stores) > 1 else reply)
+        return "\n\n".join(parts)
 
     def _toggle_hourly(self, session: Session, chat_id: int, arg: str) -> str:
         rows = session.exec(select(AlertChat).where(AlertChat.chat_id == chat_id)).all()

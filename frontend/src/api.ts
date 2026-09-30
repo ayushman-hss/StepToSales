@@ -349,3 +349,16 @@ export async function removeAlertChat(id: number): Promise<void> {
 export async function sendTestAlert(): Promise<{ delivered: number }> {
   return poolJson(await apiFetch('/api/alerts/test', { method: 'POST' }));
 }
+
+// ---- shop assistant ---------------------------------------------------------
+
+export async function askShop(question: string): Promise<string> {
+  const res = await poolJson<{ answer: string }>(
+    await apiFetch('/api/assistant/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question }),
+    }),
+  );
+  return res.answer;
+}
