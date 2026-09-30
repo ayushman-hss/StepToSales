@@ -209,9 +209,13 @@ export interface LiveBlock {
 
 export type LiveSpeed = 0 | 1 | 10 | 60 | 300;
 
+export type LiveScenario = 'normal' | 'slow' | 'busy';
+
 export interface LiveStatus {
   running: boolean;
   speed: LiveSpeed;
+  /** Demo day: bends the simulated shop's visitors and buying. */
+  scenario: LiveScenario;
   shop_time: string;
   real_time: string;
   minutes_ahead: number;
@@ -231,11 +235,19 @@ export interface RecentBill {
 
 // ---- phone alerts ----------------------------------------------------------
 
-export type AlertKind = 'conversion_drop' | 'behind_pace' | 'day_summary';
+export type AlertKind =
+  | 'slow_hour'
+  | 'busy_hour'
+  | 'behind_pace'
+  | 'ahead_pace'
+  | 'day_summary'
+  | 'conversion_drop';
 
 export interface AlertChat {
   id: number;
   title: string;
+  /** Also gets a short update after every trading hour. */
+  hourly: boolean;
   linked_at: string;
 }
 

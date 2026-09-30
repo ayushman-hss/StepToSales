@@ -68,3 +68,6 @@ class TelegramClient:
             "sendMessage",
             {"chat_id": chat_id, "text": text, "disable_web_page_preview": True},
         )
+
+    def set_commands(self, commands: list[dict]) -> bool:
+        return self._call("setMyCommands", {"commands": commands})

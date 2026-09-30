@@ -155,12 +155,14 @@ def _event_id(rng: random.Random, store_code: str) -> str:
 
 
 def simulate(
-    cal: Calibration, start: datetime, end: datetime, rng: random.Random
+    cal: Calibration, start: datetime, end: datetime, rng: random.Random,
+    visitors_factor: float = 1.0, conversion_factor: float = 1.0,
 ) -> list[SimEvent]:
     """Everything that happens in the shop in ``[start, end)``, in time order.
 
     The window is cut at hour boundaries, so the rate always matches the hour
-    an arrival falls in.
+    an arrival falls in. The factors bend the shop's usual rhythm for a demo
+    (a slow or a busy day); 1.0 is the shop as its history says.
     """
     events: list[SimEvent] = []
     if not cal.usable or end <= start:
@@ -171,9 +173,9 @@ def simulate(
         hour_end = t.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
         seg_end = min(end, hour_end)
         seconds = (seg_end - t).total_seconds()
-        rate = cal.visitors.get((t.weekday(), t.hour), 0.0)
+        rate = cal.visitors.get((t.weekday(), t.hour), 0.0) * visitors_factor
         arrivals = _poisson(rng, rate * seconds / 3600)
-        convert = cal.conversion.get(t.hour, 0.0)
+        convert = min(1.0, cal.conversion.get(t.hour, 0.0) * conversion_factor)
         pool = cal.baskets.get(t.hour) or cal.baskets[-1]
 
         times = sorted(t + timedelta(seconds=rng.random() * seconds) for _ in range(arrivals))

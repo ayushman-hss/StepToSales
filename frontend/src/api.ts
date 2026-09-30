@@ -1,8 +1,8 @@
 import type { DashboardData } from './types';
 import type { Product, BundleSuggestion } from './types';
 import type { PoolDetail, PoolStrategy, PoolEvent as PoolEventRow } from './types';
-import type { LiveSpeed, LiveStatus, RecentBill } from './types';
-import type { AlertsOverview, TelegramLink } from './types';
+import type { LiveScenario, LiveSpeed, LiveStatus, RecentBill } from './types';
+import type { AlertChat, AlertsOverview, TelegramLink } from './types';
 import { useAuth, type Me } from './auth';
 
 // ---- auth ---------------------------------------------------------------
@@ -272,6 +272,16 @@ export async function setLiveSpeed(speed: LiveSpeed): Promise<LiveStatus> {
   );
 }
 
+export async function setLiveScenario(scenario: LiveScenario): Promise<LiveStatus> {
+  return poolJson(
+    await apiFetch('/api/live/scenario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scenario }),
+    }),
+  );
+}
+
 /** One id per bill, made on the phone, so a retried tap is counted once. */
 export function newEventId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -320,6 +330,16 @@ export async function fetchAlerts(): Promise<AlertsOverview> {
 
 export async function newTelegramLink(): Promise<TelegramLink> {
   return poolJson(await apiFetch('/api/alerts/telegram/link', { method: 'POST' }));
+}
+
+export async function setChatHourly(id: number, hourly: boolean): Promise<AlertChat> {
+  return poolJson(
+    await apiFetch(`/api/alerts/chats/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hourly }),
+    }),
+  );
 }
 
 export async function removeAlertChat(id: number): Promise<void> {

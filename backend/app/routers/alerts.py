@@ -16,6 +16,8 @@ from ..alerts import alerts
 from ..db import get_session
 from ..dependencies import get_current_store
 from ..models import AlertChat, AlertSent, Store
+from ..services.alerts.rules import HOURLY
+from ..services.alerts.service import COMMANDS_HELP, WHAT_YOU_GET
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 
@@ -31,7 +33,12 @@ class TelegramState(BaseModel):
 class ChatOut(BaseModel):
     id: int
     title: str
+    hourly: bool
     linked_at: datetime
+
+
+class ChatUpdate(BaseModel):
+    hourly: bool
 
 
 class AlertOut(BaseModel):
@@ -71,6 +78,7 @@ def overview(
     recent = session.exec(
         select(AlertSent)
         .where(AlertSent.store_id == current.id)
+        .where(AlertSent.kind != HOURLY)        # routine, not news
         .order_by(AlertSent.shop_time.desc(), AlertSent.id.desc())
         .limit(20)
     ).all()
@@ -80,7 +88,8 @@ def overview(
             bot_username=alerts.bot_username,
             error=alerts.bot_error,
         ),
-        chats=[ChatOut(id=c.id, title=c.title, linked_at=c.linked_at) for c in chats],
+        chats=[ChatOut(id=c.id, title=c.title, hourly=c.hourly, linked_at=c.linked_at)
+               for c in chats],
         recent=[
             AlertOut(id=a.id, kind=a.kind, text=a.text, shop_time=a.shop_time,
                      delivered=a.delivered)
@@ -102,15 +111,34 @@ def new_link(
                    bot_username=alerts.bot_username, expires_at=code.expires_at)
 
 
+def _own_chat(session: Session, current: Store, chat_id: int) -> AlertChat:
+    row = session.get(AlertChat, chat_id)
+    if row is None or row.store_id != current.id:
+        raise HTTPException(404, "Chat not found")
+    return row
+
+
+@router.patch("/chats/{chat_id}", response_model=ChatOut)
+def update_chat(
+    chat_id: int,
+    body: ChatUpdate,
+    current: Store = Depends(get_current_store),
+    session: Session = Depends(get_session),
+):
+    row = _own_chat(session, current, chat_id)
+    row.hourly = body.hourly
+    session.add(row)
+    session.commit()
+    return ChatOut(id=row.id, title=row.title, hourly=row.hourly, linked_at=row.linked_at)
+
+
 @router.delete("/chats/{chat_id}")
 def remove_chat(
     chat_id: int,
     current: Store = Depends(get_current_store),
     session: Session = Depends(get_session),
 ):
-    row = session.get(AlertChat, chat_id)
-    if row is None or row.store_id != current.id:
-        raise HTTPException(404, "Chat not found")
+    row = _own_chat(session, current, chat_id)
     session.delete(row)
     session.commit()
     return {"ok": True}
@@ -125,7 +153,8 @@ def send_test(
         raise HTTPException(400, "Telegram is not set up on the server yet.")
     delivered = alerts.send_to_shop(
         session, current,
-        f"Test from StepToSales: alerts for {current.code} will arrive in this chat.",
+        f"\u2705 Test from StepToSales: alerts for {current.code} \u00b7 {current.name} "
+        f"will arrive in this chat.\n\n{WHAT_YOU_GET}\n\n{COMMANDS_HELP}",
     )
     if delivered == 0:
         raise HTTPException(400, "No connected chat got the message. Connect Telegram first.")

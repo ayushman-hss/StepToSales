@@ -384,7 +384,8 @@ def test_conversion_alert_needs_a_real_drop_and_enough_people():
 
 
 @pytest.mark.parametrize("method,path", [
-    ("get", "/api/live/status"), ("post", "/api/live/speed"), ("post", "/api/live/bill"),
+    ("get", "/api/live/status"), ("post", "/api/live/speed"), ("post", "/api/live/scenario"),
+    ("post", "/api/live/bill"),
     ("post", "/api/live/visit"), ("get", "/api/live/bills"),
 ])
 def test_live_routes_need_a_login(client, method, path):
@@ -433,6 +434,33 @@ def test_recent_bills_name_the_products(client):
     bills = client.get("/api/live/bills", headers=headers).json()
     assert bills[0]["items"] == 3 and bills[0]["lines"][0]["name"] == "Rusk"
     assert bills[0]["source"] == "pos"
+
+
+def test_a_slow_or_busy_demo_day_bends_the_usual_rhythm(db, shop):
+    cal = calibrate(db, shop, TODAY)
+
+    def day(visitors, buying):
+        events = simulate(cal, ts(8), ts(21), random.Random(1), visitors, buying)
+        visits = sum(e.kind == "visit" for e in events)
+        return visits, sum(e.kind == "bill" for e in events) / visits
+
+    usual_visits, usual_rate = day(1.0, 1.0)
+    slow_visits, slow_rate = day(0.5, 0.45)
+    busy_visits, _ = day(1.7, 1.2)
+    assert slow_visits < usual_visits * 0.7 and slow_rate < usual_rate * 0.7
+    assert busy_visits > usual_visits * 1.4
+
+
+def test_demo_scenario_is_per_shop(client):
+    headers = login(client)
+    assert client.post("/api/live/scenario", headers=headers,
+                       json={"scenario": "slow"}).status_code == 409
+    app_runner.step(now=ist_now())
+    res = client.post("/api/live/scenario", headers=headers, json={"scenario": "slow"})
+    assert res.status_code == 200 and res.json()["scenario"] == "slow"
+    assert client.post("/api/live/scenario", headers=headers,
+                       json={"scenario": "chaos"}).status_code == 400
+    assert client.get("/api/live/status", headers=login(client, "s2")).json()["scenario"] == "normal"
 
 
 def test_status_and_speed(client):

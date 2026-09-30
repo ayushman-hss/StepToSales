@@ -139,6 +139,8 @@ class AlertChat(SQLModel, table=True):
     chat_id: int = Field(sa_column=Column(BigInteger, nullable=False, index=True))
     #: "Amartya" or the group's name, so the page can say who is connected.
     title: str = ""
+    #: Also send a short update after every trading hour, not just alerts.
+    hourly: bool = False
     linked_at: datetime = Field(default_factory=utc_now)
 
 

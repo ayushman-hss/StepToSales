@@ -20,7 +20,7 @@ from ..live import runner
 from ..models import LiveEvent, Product, Store
 from ..services.live.clock import ist_now
 from ..services.live.engine import IncomingEvent, last_event_time, record
-from ..services.live.runner import SPEEDS
+from ..services.live.runner import SCENARIOS, SPEEDS
 from ..services.live.simulator import Line, to_paise
 
 router = APIRouter(prefix="/api/live", tags=["live"])
@@ -33,8 +33,10 @@ def _iso(t: Optional[datetime]) -> Optional[str]:
 class LiveStatus(BaseModel):
     #: The simulator is running in this API process.
     running: bool
-    #: 0 paused, 1 real time, 10 / 60 fast-forward.
+    #: 0 paused, 1 real time, 10 / 60 / 300 fast-forward.
     speed: int
+    #: Demo day: "normal", "slow" or "busy".
+    scenario: str = "normal"
     #: The shop's clock (IST). Ahead of real_time while fast-forwarding.
     shop_time: str
     real_time: str
@@ -61,6 +63,7 @@ def _status(session: Session, store: Store) -> LiveStatus:
     return LiveStatus(
         running=runner.running and shop is not None,
         speed=shop.speed if shop else 0,
+        scenario=shop.scenario if shop else "normal",
         shop_time=_iso(shop_time),
         real_time=_iso(real),
         minutes_ahead=max(0, int((shop_time - real).total_seconds() // 60)),
@@ -92,6 +95,24 @@ def set_speed(
     if body.speed not in SPEEDS:
         raise HTTPException(400, f"speed must be one of {list(SPEEDS)}")
     if runner.set_speed(store.code, body.speed) is None:
+        raise HTTPException(409, "The live simulator is not running for this shop")
+    return _status(session, store)
+
+
+class ScenarioIn(BaseModel):
+    scenario: str
+
+
+@router.post("/scenario", response_model=LiveStatus)
+def set_scenario(
+    body: ScenarioIn,
+    session: Session = Depends(get_session),
+    store: Store = Depends(get_current_store),
+):
+    """Make the rest of the simulated day slow or busy -- for demos."""
+    if body.scenario not in SCENARIOS:
+        raise HTTPException(400, f"scenario must be one of {list(SCENARIOS)}")
+    if runner.set_scenario(store.code, body.scenario) is None:
         raise HTTPException(409, "The live simulator is not running for this shop")
     return _status(session, store)
 

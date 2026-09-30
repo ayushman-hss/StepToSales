@@ -5,6 +5,7 @@ import {
   newTelegramLink,
   removeAlertChat,
   sendTestAlert,
+  setChatHourly,
 } from '../api';
 import { useCurrentStore } from '../auth';
 import type { AlertKind, AlertsOverview, TelegramLink } from '../types';
@@ -12,10 +13,13 @@ import { Badge, Button, EmptyState, Notice, PageHeader, Section } from '../lib/u
 
 const REFRESH_MS = 4000;
 
-const KIND: Record<AlertKind, { label: string; tone: 'clay' | 'brass' | 'board' }> = {
-  conversion_drop: { label: 'Few buyers', tone: 'clay' },
+const KIND: Record<AlertKind, { label: string; tone: 'clay' | 'brass' | 'board' | 'neutral' }> = {
+  slow_hour: { label: 'Slow hour', tone: 'clay' },
+  busy_hour: { label: 'Busy hour', tone: 'board' },
   behind_pace: { label: 'Behind pace', tone: 'brass' },
-  day_summary: { label: "Day's summary", tone: 'board' },
+  ahead_pace: { label: 'Strong day', tone: 'board' },
+  day_summary: { label: "Day's summary", tone: 'neutral' },
+  conversion_drop: { label: 'Few buyers', tone: 'clay' },
 };
 
 /** "2026-09-30T14:05:09" -> "30 Sep, 14:05". */
@@ -107,6 +111,19 @@ export function AlertsPage() {
     }
   };
 
+  const onHourly = async (id: number, hourly: boolean) => {
+    setError(null);
+    // Tick at once; the server catches up a moment later.
+    setData((d) => d && { ...d, chats: d.chats.map((c) => (c.id === id ? { ...c, hourly } : c)) });
+    try {
+      await setChatHourly(id, hourly);
+      setNote(hourly ? 'Hourly updates on for that chat.' : 'Hourly updates off for that chat.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not change that');
+      await refresh();
+    }
+  };
+
   const onRemove = async (id: number, title: string) => {
     setError(null);
     try {
@@ -125,7 +142,7 @@ export function AlertsPage() {
     <div>
       <PageHeader
         title="Phone alerts"
-        lead="A Telegram message when fewer people than usual buy, when sales fall well behind a usual day, and a summary after closing."
+        lead="A Telegram message when an hour is slow or busy, when the day is well behind or ahead of a usual one, and a summary after closing."
       />
 
       <div className="space-y-6">
@@ -165,10 +182,21 @@ export function AlertsPage() {
               ) : (
                 <ul className="divide-y divide-rule">
                   {chats.map((c) => (
-                    <li key={c.id} className="flex items-center gap-3 py-2">
+                    <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
                       <CheckCircle2 size={16} className="text-board" aria-hidden />
-                      <span className="min-w-0 flex-1 truncate text-body text-ink">{c.title}</span>
-                      <span className="text-small text-muted">since {linkedOn(c.linked_at)}</span>
+                      <span className="min-w-0 flex-1 truncate text-body text-ink">
+                        {c.title}
+                        <span className="ml-2 text-small text-muted">since {linkedOn(c.linked_at)}</span>
+                      </span>
+                      <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-small text-ink md:min-h-9">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-board"
+                          checked={c.hourly}
+                          onChange={(e) => onHourly(c.id, e.target.checked)}
+                        />
+                        Hourly updates
+                      </label>
                       <Button
                         variant="quiet"
                         size="sm"
@@ -224,6 +252,30 @@ export function AlertsPage() {
               </div>
             </div>
           )}
+        </Section>
+
+        <Section title="What gets sent">
+          <ul className="space-y-1.5 text-body text-ink">
+            <li>
+              <Badge tone="clay">Slow hour</Badge> fewer people came in than usual, or fewer of
+              them bought.
+            </li>
+            <li>
+              <Badge tone="board">Busy hour</Badge> an hour took well over its usual.
+            </li>
+            <li>
+              <Badge tone="brass">Behind pace</Badge> or <Badge tone="board">Strong day</Badge>{' '}
+              the day is well behind or ahead of a usual one. Once a day.
+            </li>
+            <li>
+              <Badge tone="neutral">Day&apos;s summary</Badge> after the usual closing time.
+            </li>
+          </ul>
+          <p className="mt-3 text-small text-muted">
+            An ordinary day stays quiet on purpose. To see alerts now, go to the dashboard, set{' '}
+            <b>Demo day</b> to Slow or Busy and pick 60&times;: the next hour that ends sends one.
+            Tick <b>Hourly updates</b> for a short message after every hour as well.
+          </p>
         </Section>
 
         <Section title="Recent alerts">

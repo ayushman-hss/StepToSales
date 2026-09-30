@@ -29,7 +29,7 @@ from ...models import AlertChat, AlertLinkCode, AlertSent, Store, utc_now
 from ..live.clock import ist_now
 from ..live.runner import CATCH_UP_AFTER
 from ..live.today import today_view
-from .rules import Alert, clock_hour, due_alerts, status_text
+from .rules import HOURLY, Alert, clock_hour, due_alerts, status_text
 from .telegram import TelegramClient, TelegramConflict, TelegramError
 
 log = logging.getLogger("steptosales.alerts")
@@ -38,12 +38,34 @@ WATCH_SECONDS = 4.0
 POLL_TIMEOUT = 20
 LINK_CODE_TTL = timedelta(minutes=15)
 
-HELP = (
-    "This bot sends StepToSales alerts for your shop.\n"
-    "To connect: open Phone alerts in StepToSales and tap Connect Telegram.\n"
-    "/status - how today is going\n"
-    "/stop - stop sending alerts to this chat"
+WHAT_YOU_GET = (
+    "You'll get a message here when:\n"
+    "\u2022 an hour is slow: fewer people came in, or fewer of them bought\n"
+    "\u2022 an hour is busy: well above a usual one\n"
+    "\u2022 the day is well behind, or well ahead of, a usual day\n"
+    "\u2022 and a summary after closing."
 )
+
+COMMANDS_HELP = (
+    "/status - how today is going right now\n"
+    "/hourly - a short update after every hour (send again to turn off)\n"
+    "/stop - stop sending alerts to this chat\n"
+    "/help - this list"
+)
+
+HELP = (
+    "This bot sends StepToSales alerts about your shop.\n"
+    "To connect: open Phone alerts in StepToSales and tap Connect Telegram.\n\n"
+    + COMMANDS_HELP
+)
+
+#: The menu Telegram shows when you type "/".
+BOT_COMMANDS = [
+    {"command": "status", "description": "How today is going right now"},
+    {"command": "hourly", "description": "Turn hourly updates on or off"},
+    {"command": "stop", "description": "Stop alerts to this chat"},
+    {"command": "help", "description": "What this bot does"},
+]
 
 
 def _chat_title(chat: dict) -> str:
@@ -174,16 +196,24 @@ class AlertService:
         except IntegrityError:        # raised by a parallel check a moment ago
             session.rollback()
             return None
-        row.delivered = self.send_to_shop(session, store, f"{_heading(store)}\n{alert.text}")
+        row.delivered = self.send_to_shop(
+            session, store, f"{_heading(store)}\n{alert.text}",
+            hourly_only=alert.kind == HOURLY,
+        )
         session.add(row)
         session.commit()
         return row
 
-    def send_to_shop(self, session: Session, store: Store, text: str) -> int:
-        """Send to every chat linked to the shop. Returns how many got it."""
+    def send_to_shop(self, session: Session, store: Store, text: str,
+                     hourly_only: bool = False) -> int:
+        """Send to every chat linked to the shop (or only those that asked
+        for hourly updates). Returns how many got it."""
         if self.client is None:
             return 0
-        chats = session.exec(select(AlertChat).where(AlertChat.store_id == store.id)).all()
+        stmt = select(AlertChat).where(AlertChat.store_id == store.id)
+        if hourly_only:
+            stmt = stmt.where(AlertChat.hourly == True)  # noqa: E712 -- SQL, not Python
+        chats = session.exec(stmt).all()
         delivered = 0
         for chat in chats:
             try:
@@ -233,6 +263,10 @@ class AlertService:
             return
         if self.bot_username is None:
             self.bot_username = self.client.get_me().get("username")
+            try:
+                self.client.set_commands(BOT_COMMANDS)
+            except TelegramError as e:           # only the "/" menu is missing
+                log.warning("could not set the bot's command menu: %s", e)
         updates = self.client.get_updates(self._offset, timeout=POLL_TIMEOUT)
         self.bot_error = None
         for update in updates:
@@ -256,16 +290,15 @@ class AlertService:
             if command == "/start" and arg.strip():
                 store = self.link_chat(session, arg.strip(), chat)
                 reply = (
-                    f"Connected to {_heading(store)}.\n"
-                    "You'll get a message here when fewer people than usual buy, "
-                    "when sales fall well behind a usual day, and a summary after closing.\n"
-                    "Send /status any time to see how today is going."
+                    f"Connected to {_heading(store)}.\n\n{WHAT_YOU_GET}\n\n{COMMANDS_HELP}"
                     if store else
                     "That link has expired or was already used. Open Phone alerts "
                     "in StepToSales and tap Connect Telegram again."
                 )
             elif command == "/status":
                 reply = self._status_reply(session, int(chat["id"]))
+            elif command == "/hourly":
+                reply = self._toggle_hourly(session, int(chat["id"]), arg.strip().lower())
             elif command == "/stop":
                 rows = session.exec(
                     select(AlertChat).where(AlertChat.chat_id == int(chat["id"]))
@@ -281,6 +314,22 @@ class AlertService:
         if self.client is not None:
             self.client.send_message(int(chat["id"]), reply)
         return reply
+
+    def _toggle_hourly(self, session: Session, chat_id: int, arg: str) -> str:
+        rows = session.exec(select(AlertChat).where(AlertChat.chat_id == chat_id)).all()
+        if not rows:
+            return "This chat isn't connected to a shop yet.\n\n" + HELP
+        on = {"on": True, "off": False}.get(arg, not all(r.hourly for r in rows))
+        for row in rows:
+            row.hourly = on
+            session.add(row)
+        session.commit()
+        return (
+            "Hourly updates on. After every hour the shop is open you'll get its "
+            "takings against the usual, and the day so far. Send /hourly again to stop them."
+            if on else
+            "Hourly updates off. You'll still get alerts when something needs attention."
+        )
 
     def _status_reply(self, session: Session, chat_id: int) -> str:
         stores = session.exec(

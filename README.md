@@ -851,18 +851,31 @@ and open the address Vite prints for your network.
 
 ## 8. Phone alerts (Telegram)
 
-The API watches every shop's day and raises a few alerts, at most:
+The API watches every shop's day and messages its phone when something is
+worth knowing:
 
-- **Few buyers**: in the hour that just ended, far fewer visitors than usual
-  bought (at least 8 visitors, and under 60% of the usual share). One per hour.
-- **Behind pace**: sales are 25% or more behind a usual weekday, once a
-  quarter of a usual day's takings should be in. One per day.
+- **Slow hour**: in the hour that just ended, far fewer people came in than
+  usual (60% or less), or far fewer of them bought (under 60% of the usual
+  share, with at least 8 visitors). Says which, because the fixes differ.
+- **Busy hour**: the hour took at least 1.5× its usual, with 5 or more bills.
+- **Behind pace** / **Strong day**: the day is 25% behind or 20% ahead of a
+  usual weekday, once a quarter of a usual day's takings should be in. Once a
+  day each.
 - **Day's summary**: after the shop's usual closing time: takings against a
-  usual day, bills and visitors, the best hour. One per day.
+  usual day, bills and visitors, the best hour.
+- **Hourly updates** (opt-in per chat): a short line after every trading
+  hour, with the day so far.
+
+At most one hourly message per hour. An ordinary day stays quiet on purpose.
 
 Every alert is listed on the **Phone alerts** page (`/alerts`, linked from the
 live strip on the dashboard), sent or not. With a Telegram bot set up, each
 one is also sent to every chat connected to that shop.
+
+**Seeing it in a demo.** The live strip has a **Demo day** switch: *Usual*,
+*Slow* (half the visitors, under half the buying) or *Busy* (1.7× visitors,
+more buying). Pick Slow or Busy, then 60×: the next hour that ends sends a
+Slow hour or Busy hour alert, about a minute later.
 
 **Set up the bot (once, about two minutes):**
 
@@ -882,11 +895,10 @@ the bot the `/start <code>` shown on the page; the code works once, for 15
 minutes. A group works too: add the bot to the group and send the same
 `/start <code>` there. In the chat:
 
-- `/status`: how today is going, right now.
+- `/status`: how today is going, right now, and the last hour.
+- `/hourly`: hourly updates on or off (also a tick box on the page).
 - `/stop`: stop alerts to that chat.
-
-For a demo, press 300× on the dashboard: the rest of the day runs in a couple
-of minutes and the summary arrives when the shop closes.
+- `/help`: the list. Typing `/` in the chat shows the same menu.
 
 | Variable | Default | Meaning |
 |---|---|---|
