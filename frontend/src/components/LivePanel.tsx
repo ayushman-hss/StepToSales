@@ -45,7 +45,6 @@ const SMOOTH = 0.0;
 
 /** Redraw at most this often while gliding; plenty for a line, easy on laptops. */
 const FRAME_MS = 30;
-const GLIDE = false;
 
 /** Only the hours the shop is ever open: a band of zeros at 3am is noise. */
 function openRows(band: LiveBandPoint[]): LiveBandPoint[] {
