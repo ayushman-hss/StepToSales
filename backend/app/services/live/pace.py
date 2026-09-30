@@ -72,6 +72,7 @@ class LiveView:
     clock_hour: float | None = None
     #: Today's sales up to that moment, the in-progress hour included.
     sales_so_far: float = 0.0
+    last_hour: HourNow | None = None
 
 
 def _per_date_hour(df: pd.DataFrame) -> pd.DataFrame:
