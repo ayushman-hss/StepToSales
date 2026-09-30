@@ -210,7 +210,7 @@ Details in [8. Phone alerts (Telegram)](#8-phone-alerts-telegram).
 
 StepToSales separates the user interface, API layer, retail analytics, group-buying domain logic, the live layer and persistence.
 
-![StepToSales system architecture](docs/architecture.png)
+![StepToSales system architecture](docs/architecturev2.png)
 
 *Architecture diagram generated from the repository structure using GitDiagram. It predates live mode and phone alerts; the request flow below is current.*
 
