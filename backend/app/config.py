@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -20,6 +21,21 @@ class Settings(BaseSettings):
     #: Only for a self-hosted Bot API server; leave as is otherwise.
     telegram_api_url: str = "https://api.telegram.org"
 
+    #: Where the built frontend lives (frontend/dist). When set, the API also
+    #: serves the website, so one service is the whole app. Empty in development,
+    #: where Vite serves the frontend.
+    static_dir: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("database_url")
+    @classmethod
+    def _psycopg(cls, url: str) -> str:
+        """Hosts hand out postgres://... or postgresql://...; SQLAlchemy needs
+        to be told to use the psycopg 3 driver this project installs."""
+        for prefix in ("postgres://", "postgresql://"):
+            if url.startswith(prefix):
+                return "postgresql+psycopg://" + url[len(prefix):]
+        return url
 
 settings = Settings()
