@@ -849,6 +849,55 @@ and open the address Vite prints for your network.
 
 `reset_demo.py` also clears live events. Restart the API after running it.
 
+## 8. Phone alerts (Telegram)
+
+The API watches every shop's day and raises a few alerts, at most:
+
+- **Few buyers**: in the hour that just ended, far fewer visitors than usual
+  bought (at least 8 visitors, and under 60% of the usual share). One per hour.
+- **Behind pace**: sales are 25% or more behind a usual weekday, once a
+  quarter of a usual day's takings should be in. One per day.
+- **Day's summary**: after the shop's usual closing time: takings against a
+  usual day, bills and visitors, the best hour. One per day.
+
+Every alert is listed on the **Phone alerts** page (`/alerts`, linked from the
+live strip on the dashboard), sent or not. With a Telegram bot set up, each
+one is also sent to every chat connected to that shop.
+
+**Set up the bot (once, about two minutes):**
+
+1. In Telegram, message **@BotFather**, send `/newbot`, and pick a name and a
+   username ending in `bot`.
+2. Put the token it gives you in `backend/.env`:
+
+   ```text
+   TELEGRAM_BOT_TOKEN=123456789:AA...
+   ```
+
+3. Restart the backend (or run `start.bat` again).
+
+**Connect a phone:** log in as the shop, open **Phone alerts**, tap **Connect
+Telegram** and press **Start** in the chat that opens. On another phone, send
+the bot the `/start <code>` shown on the page; the code works once, for 15
+minutes. A group works too: add the bot to the group and send the same
+`/start <code>` there. In the chat:
+
+- `/status`: how today is going, right now.
+- `/stop`: stop alerts to that chat.
+
+For a demo, press 300× on the dashboard: the rest of the day runs in a couple
+of minutes and the summary arrives when the shop closes.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | *(empty)* | From @BotFather. Empty: alerts are listed on the page but not sent. |
+| `ALERTS_ENABLED` | `true` | Run the alert watcher. Like the simulator, in **one** API process only. |
+
+A bot can only be read by one running copy of the app. If the laptop and a
+hosted copy both use the same token, the page shows a warning; give each its
+own bot. `reset_demo.py` clears the alert list (so the day raises them again)
+but keeps connected chats.
+
 ---
 
 # Testing
@@ -908,7 +957,8 @@ The current interface focuses on one active pool for simplicity.
 
 ### Notifications
 
-The event log records events such as:
+Shops get Telegram alerts about their day (see *Phone alerts* above). Group
+buying does not use them yet: the pool event log records events such as:
 
 ```text
 pool crossed a tier
@@ -940,7 +990,7 @@ Potential next steps include:
 - Promotion-aware demand simulation
 - Supplier-facing portal
 - Multi-pool management
-- Notifications
+- Group-buying notifications
 - Optimistic concurrency control
 - Real POS integrations
 - Real supplier integrations
@@ -981,4 +1031,4 @@ The project therefore moves from:
 
 # License
 
-MIT
+MIT

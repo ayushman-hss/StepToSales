@@ -2,6 +2,7 @@ import type { DashboardData } from './types';
 import type { Product, BundleSuggestion } from './types';
 import type { PoolDetail, PoolStrategy, PoolEvent as PoolEventRow } from './types';
 import type { LiveSpeed, LiveStatus, RecentBill } from './types';
+import type { AlertsOverview, TelegramLink } from './types';
 import { useAuth, type Me } from './auth';
 
 // ---- auth ---------------------------------------------------------------
@@ -309,4 +310,22 @@ export async function countVisitor(eventId: string): Promise<TillReceipt> {
 
 export async function fetchRecentBills(limit = 8): Promise<RecentBill[]> {
   return poolJson(await apiFetch(`/api/live/bills?limit=${limit}`));
+}
+
+// ---- phone alerts -----------------------------------------------------------
+
+export async function fetchAlerts(): Promise<AlertsOverview> {
+  return poolJson(await apiFetch('/api/alerts'));
+}
+
+export async function newTelegramLink(): Promise<TelegramLink> {
+  return poolJson(await apiFetch('/api/alerts/telegram/link', { method: 'POST' }));
+}
+
+export async function removeAlertChat(id: number): Promise<void> {
+  await poolJson(await apiFetch(`/api/alerts/chats/${id}`, { method: 'DELETE' }));
+}
+
+export async function sendTestAlert(): Promise<{ delivered: number }> {
+  return poolJson(await apiFetch('/api/alerts/test', { method: 'POST' }));
 }

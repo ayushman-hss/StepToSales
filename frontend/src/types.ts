@@ -228,3 +228,36 @@ export interface RecentBill {
   items: number;
   lines: { sku: string; name: string; qty: number; unit_price_paise: number }[];
 }
+
+// ---- phone alerts ----------------------------------------------------------
+
+export type AlertKind = 'conversion_drop' | 'behind_pace' | 'day_summary';
+
+export interface AlertChat {
+  id: number;
+  title: string;
+  linked_at: string;
+}
+
+export interface ShopAlert {
+  id: number;
+  kind: AlertKind;
+  text: string;
+  /** Shop clock (IST) when it was raised. */
+  shop_time: string;
+  /** How many Telegram chats got it; 0 when Telegram is not set up. */
+  delivered: number;
+}
+
+export interface AlertsOverview {
+  telegram: { configured: boolean; bot_username: string | null; error: string | null };
+  chats: AlertChat[];
+  recent: ShopAlert[];
+}
+
+export interface TelegramLink {
+  code: string;
+  url: string | null;
+  bot_username: string | null;
+  expires_at: string;
+}

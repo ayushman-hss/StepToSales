@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ReceiptText } from 'lucide-react';
+import { BellRing, ReceiptText } from 'lucide-react';
 import clsx from 'clsx';
 import { fetchLiveStatus, setLiveSpeed } from '../api';
 import type { LiveSpeed, LiveStatus } from '../types';
@@ -117,6 +117,13 @@ export function LiveStrip() {
         >
           <ReceiptText size={15} aria-hidden />
           Open the till
+        </Link>
+        <Link
+          to="/alerts"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-control px-2 text-small font-semibold text-board hover:bg-board-tint md:min-h-9"
+        >
+          <BellRing size={15} aria-hidden />
+          Phone alerts
         </Link>
       </div>
     </div>

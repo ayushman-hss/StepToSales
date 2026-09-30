@@ -4,8 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .db import init_db
+from .alerts import alerts
 from .live import runner
-from .routers import auth, dashboard, live, products, bundles, pools
+from .routers import alerts as alerts_router, auth, dashboard, live, products, bundles, pools
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -13,7 +14,10 @@ async def lifespan(app: FastAPI):
     init_db()
     if settings.live_simulator:
         runner.start()
+    if settings.alerts_enabled:
+        alerts.start()
     yield
+    await alerts.stop()
     await runner.stop()
 
 
@@ -35,6 +39,7 @@ def root():
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(live.router)
+app.include_router(alerts_router.router)
 app.include_router(products.router)
 app.include_router(bundles.router)
 app.include_router(pools.router)
