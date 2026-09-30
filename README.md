@@ -15,7 +15,7 @@ For a small shop, that question can mean very different things:
 
 StepToSale turns ordinary retail data into actionable answers across all three.
 
-Built with **FastAPI + PostgreSQL** on the backend and **React + TypeScript + Vite** on the frontend.
+Built with **Python + FastAPI + PostgreSQL** on the backend and **React + TypeScript + Vite** on the frontend.
 
 ---
 
