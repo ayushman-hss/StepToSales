@@ -335,6 +335,9 @@ The strongest pairing is sampled more frequently than weaker pairings, creating 
 This gives the market-basket engine meaningful associations to discover.
 
 ---
+##"Why didn't you just use random numbers?"
+
+"Random numbers don't reflect real retail behavior. By modeling salary cycles, store profiles, and price elasticity, our market-basket analysis and footfall models actually have meaningful patterns to detect."
 
 ## Why this simulation is useful
 
