@@ -851,6 +851,61 @@ and open the address Vite prints for your network.
 
 ---
 
+# Hosting
+
+The app ships as **one Docker image**: the website is built into it and the
+API serves it, so one service with one address is the whole app, with no
+CORS to set up. It needs a Postgres database and a host that keeps **one**
+process running (the live simulator and the Telegram bot live in it).
+
+On start the container runs `scripts/boot.py`: an empty database gets the demo
+data (about 15 seconds, once); an existing one gets `alembic upgrade head`.
+Redeploys and restarts keep today's live trading, alerts and connected phones.
+
+## Render (free, about 10 minutes)
+
+`render.yaml` describes the whole setup: a free web service and a free
+Postgres database, both in Singapore.
+
+1. Push the branch you want to host to GitHub (Render builds from GitHub).
+2. On [render.com](https://render.com), sign in with GitHub, then
+   **New → Blueprint**, pick this repository and the branch, **Apply**.
+3. When it asks for `TELEGRAM_BOT_TOKEN`, paste the bot's token, or leave it
+   empty to run without phone alerts.
+4. Wait for the first build (a few minutes). The address is shown at the top
+   of the service page, e.g. `https://steptosales.onrender.com`. Log in with
+   the demo logins (`s1`/`s1shop`, `s2`/`s2shop`).
+
+Free plan limits, so a demo isn't surprised by them:
+
+- **It sleeps after 15 minutes without visitors**, and the first visit then
+  takes about a minute. While asleep there is no simulated trading and no
+  Telegram; on waking, each shop catches up on the missed hours. To keep it
+  awake for a demo day, point a free uptime checker (UptimeRobot,
+  cron-job.org) at `https://<your-address>/api/health` every 10 minutes.
+- **The free database expires after 30 days.** Upgrade it, or create a new
+  one before then.
+- **Only one copy may use a bot token.** While the hosted app has the token,
+  remove `TELEGRAM_BOT_TOKEN` from your laptop's `backend/.env` (or give the
+  laptop its own bot), otherwise the two fight over the bot's messages.
+
+For no sleeping, the paid Starter plan (or any host that runs a container
+all the time, such as Railway, Fly.io or a small VM) works with the same image.
+
+## Any other host
+
+```bash
+docker build -t steptosales .
+docker run -p 8000:8000 -e DATABASE_URL=postgresql://user:pass@host:5432/db \
+  -e TELEGRAM_BOT_TOKEN=... steptosales
+```
+
+`DATABASE_URL` may be given as `postgres://`, `postgresql://` or
+`postgresql+psycopg://`. The container listens on `$PORT` (default 8000) and
+answers `GET /api/health` for health checks. Run exactly one instance.
+
+---
+
 # Testing
 
 Run the backend test suite with:

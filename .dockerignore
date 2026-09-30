@@ -1,0 +1,19 @@
+# Keep the build context small and free of secrets.
+.git
+**/node_modules
+**/.venv
+**/venv
+**/__pycache__
+**/.pytest_cache
+**/.hypothesis
+**/.coverage
+**/coverage.xml
+**/.env
+**/.env.*
+!.env.example
+frontend/dist
+*.patch
+docs
+bt.html
+btd.html
+Claude outputs

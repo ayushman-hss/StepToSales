@@ -8,7 +8,8 @@ from app import models  # noqa: F401  -- registers models on metadata
 from app import models_pooling  # noqa: F401  -- pooling tables
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# configparser treats % as interpolation; a password may contain one.
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -42,4 +43,4 @@ def run_migrations_online():
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online()
+    run_migrations_online()
