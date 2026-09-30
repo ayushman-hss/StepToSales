@@ -12,6 +12,13 @@ class Settings(BaseSettings):
     #: needed when the frontend is served from the same host or via the Vite
     #: proxy; needed for a separately hosted frontend.
     cors_origins: str = "http://localhost:5173"
+    #: Watch every shop's day and raise alerts (shown on the Phone alerts
+    #: page). Like the simulator, run it in one API process only.
+    alerts_enabled: bool = True
+    #: From @BotFather. Empty: alerts are still recorded, just not sent.
+    telegram_bot_token: str = ""
+    #: Only for a self-hosted Bot API server; leave as is otherwise.
+    telegram_api_url: str = "https://api.telegram.org"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

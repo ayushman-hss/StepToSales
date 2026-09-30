@@ -41,6 +41,13 @@ CATCH_UP_AFTER = timedelta(minutes=1)
 MAX_BACKFILL = timedelta(days=7)
 RECALIBRATE_AFTER = timedelta(minutes=30)
 SPEEDS = (0, 1, 10, 60, 300)
+#: Demo days: (visitors, chance of buying) against the shop's usual. Lets a
+#: demo show the phone alerts for a bad or a good day on demand.
+SCENARIOS: dict[str, tuple[float, float]] = {
+    "normal": (1.0, 1.0),
+    "slow": (0.5, 0.45),
+    "busy": (1.7, 1.2),
+}
 
 
 @dataclass
@@ -49,6 +56,7 @@ class ShopState:
     code: str
     clock: datetime
     speed: int = 1
+    scenario: str = "normal"
     rng: random.Random = field(default_factory=random.Random)
     calibration: Calibration | None = None
     calibrated_at: datetime | None = None
@@ -128,6 +136,15 @@ class LiveRunner:
                 shop.speed = speed
             return shop
 
+    def set_scenario(self, code: str, scenario: str) -> ShopState | None:
+        if scenario not in SCENARIOS:
+            raise ValueError(f"scenario must be one of {list(SCENARIOS)}")
+        with self._lock:
+            shop = self.shops.get(code)
+            if shop is not None:
+                shop.scenario = scenario
+            return shop
+
     def shop_now(self, code: str) -> datetime:
         """The shop's current time: its simulated clock if that runs ahead."""
         now = ist_now()
@@ -175,7 +192,8 @@ class LiveRunner:
             return 0
 
         cal = self._calibration(session, store, shop, target)
-        events = simulate(cal, shop.clock, target, shop.rng)
+        visitors, buying = SCENARIOS.get(shop.scenario, SCENARIOS["normal"])
+        events = simulate(cal, shop.clock, target, shop.rng, visitors, buying)
         shop.clock = target
         if not events:
             return 0

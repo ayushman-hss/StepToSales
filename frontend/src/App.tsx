@@ -10,6 +10,7 @@ import { ProductsPage } from './pages/ProductsPage';
 import { BundlesPage } from './pages/BundlePage';
 import { PoolsPage } from './pages/PoolsPage';
 import { TillPage } from './pages/TillPage';
+import { AlertsPage } from './pages/AlertsPage';
 
 export default function App() {
   // A token saved from an earlier visit is only trusted once the server
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/bundles" element={<BundlesPage />} />
           <Route path="/pools" element={<PoolsPage />} />
           <Route path="/pos" element={<TillPage />} />
+          <Route path="/alerts" element={<AlertsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

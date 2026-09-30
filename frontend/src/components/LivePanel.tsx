@@ -175,7 +175,7 @@ function BandChart({ live }: { live: LiveBlock }) {
       !tip ||
       !from ||
       rebuild ||
-      !GLIDE ||
+      reducedMotion() ||
       tip[0] < from[0] - 1e-9 || // clock went back: a reset, a new day
       tip[1] < from[1] - 0.5;
     if (jump) {

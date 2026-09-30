@@ -41,7 +41,7 @@ from app.services.bundles import generate_suggestions
 
 from app.models import (
     Store, Upload, HourlyData, SaleLine, Product, BundleSuggestion, StoreUser,
-    AuthSession, LiveEvent,
+    AuthSession, LiveEvent, AlertSent, AlertLinkCode,
 )
 from app.services.live.engine import LIVE_UPLOAD
 from app.services.auth import hash_password, normalise_username
@@ -302,6 +302,10 @@ def main() -> None:
         # Live events are rebuilt on top of fresh history, never kept across a
         # reset: they would sit in hours the new history already covers.
         session.execute(sa_delete(LiveEvent))
+        # So the fresh day raises its alerts again. Linked Telegram chats are
+        # kept: a phone connected once stays connected across resets.
+        session.execute(sa_delete(AlertSent))
+        session.execute(sa_delete(AlertLinkCode))
         session.commit()
         load_hourly(session)
         for code in STORES:

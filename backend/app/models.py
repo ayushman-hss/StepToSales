@@ -1,4 +1,5 @@
 from sqlmodel import SQLModel, Field
+from sqlalchemy import BigInteger, Column, UniqueConstraint
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -125,3 +126,54 @@ class LiveEvent(SQLModel, table=True):
     amount_paise: int = 0
     #: Bills only: JSON list of {"sku", "qty", "unit_price_paise"}.
     lines: str = "[]"
+
+
+class AlertChat(SQLModel, table=True):
+    """A Telegram chat that gets a shop's alerts -- the owner's phone, or a
+    group with the staff in it. A shop can have several."""
+    __tablename__ = "alert_chat"
+    __table_args__ = (UniqueConstraint("store_id", "chat_id"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    store_id: int = Field(foreign_key="store.id", index=True)
+    #: Telegram ids do not fit in 32 bits (groups are -100xxxxxxxxxx).
+    chat_id: int = Field(sa_column=Column(BigInteger, nullable=False, index=True))
+    #: "Amartya" or the group's name, so the page can say who is connected.
+    title: str = ""
+    #: Also send a short update after every trading hour, not just alerts.
+    hourly: bool = False
+    linked_at: datetime = Field(default_factory=utc_now)
+
+
+class AlertLinkCode(SQLModel, table=True):
+    """A one-time code that ties a Telegram chat to a shop.
+
+    The shop's page shows a link that opens the bot with this code; the bot
+    sees it in "/start <code>" and links whoever sent it. Short-lived, so a
+    code seen over someone's shoulder is useless by the time they try it.
+    """
+    __tablename__ = "alert_link_code"
+    code: str = Field(primary_key=True)
+    store_id: int = Field(foreign_key="store.id", index=True)
+    expires_at: datetime
+
+
+class AlertSent(SQLModel, table=True):
+    """Every alert raised for a shop, delivered or not.
+
+    Doubles as the de-duplication key -- (store, kind, key) is unique, so the
+    same hour is never reported twice, even across restarts -- and as the
+    feed on the alerts page, which works without Telegram set up at all.
+    """
+    __tablename__ = "alert_sent"
+    __table_args__ = (UniqueConstraint("store_id", "kind", "key"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    store_id: int = Field(foreign_key="store.id", index=True)
+    kind: str                       # "conversion_drop" | "behind_pace" | "day_summary"
+    key: str                        # e.g. "2026-09-30" or "2026-09-30T14"
+    text: str
+    #: The shop clock when it was raised (IST, naive), which is ahead of the
+    #: real clock while fast-forwarding.
+    shop_time: datetime
+    #: How many chats it reached; 0 when Telegram is not set up.
+    delivered: int = 0
+    created_at: datetime = Field(default_factory=utc_now)

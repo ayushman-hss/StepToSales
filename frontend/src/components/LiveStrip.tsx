@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ReceiptText } from 'lucide-react';
+import { BellRing, ReceiptText } from 'lucide-react';
 import clsx from 'clsx';
-import { fetchLiveStatus, setLiveSpeed } from '../api';
-import type { LiveSpeed, LiveStatus } from '../types';
+import { fetchLiveStatus, setLiveScenario, setLiveSpeed } from '../api';
+import type { LiveScenario, LiveSpeed, LiveStatus } from '../types';
 import { Segmented } from '../lib/ui/controls';
 
 const SPEEDS: { value: string; label: string }[] = [
@@ -12,6 +12,13 @@ const SPEEDS: { value: string; label: string }[] = [
   { value: '10', label: '10×' },
   { value: '60', label: '60×' },
   { value: '300', label: '300×' },
+];
+
+/** Bends the simulated day so the phone alerts can be shown on demand. */
+const SCENARIOS: { value: LiveScenario; label: string }[] = [
+  { value: 'normal', label: 'Usual' },
+  { value: 'slow', label: 'Slow' },
+  { value: 'busy', label: 'Busy' },
 ];
 
 /** "2026-09-30T14:05:09" -> "14:05". */
@@ -60,6 +67,15 @@ export function LiveStrip() {
   const live = status.running && status.speed > 0;
   const lastBill = ago(status.last_bill_at, status.shop_time);
 
+  const onScenario = async (v: LiveScenario) => {
+    setBusy(true);
+    try {
+      setStatus(await setLiveScenario(v));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onSpeed = async (v: string) => {
     setBusy(true);
     try {
@@ -104,10 +120,25 @@ export function LiveStrip() {
 
       <div className="flex flex-wrap items-center gap-3">
         {status.running && (
+          <span className="inline-flex items-center gap-2">
+            <span className="text-small text-muted" aria-hidden>
+              Demo day
+            </span>
+            <Segmented
+              value={status.scenario ?? 'normal'}
+              onChange={(v) => !busy && onScenario(v)}
+              options={SCENARIOS}
+              ariaLabel="Demo day"
+              size="sm"
+            />
+          </span>
+        )}
+        {status.running && (
           <Segmented
             value={String(status.speed)}
             onChange={(v) => !busy && onSpeed(v)}
             options={SPEEDS}
+            ariaLabel="Speed"
             size="sm"
           />
         )}
@@ -117,6 +148,13 @@ export function LiveStrip() {
         >
           <ReceiptText size={15} aria-hidden />
           Open the till
+        </Link>
+        <Link
+          to="/alerts"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-control px-2 text-small font-semibold text-board hover:bg-board-tint md:min-h-9"
+        >
+          <BellRing size={15} aria-hidden />
+          Phone alerts
         </Link>
       </div>
     </div>

@@ -149,8 +149,23 @@ def live_view(
         usual_sales=round(float(sales[current].mean()), 2),
     )
 
+    def hour_stats(h: int) -> HourNow:
+        r = now_df[now_df["hour"] == h]
+        return HourNow(
+            hour=h,
+            footfall=int(r["footfall"].sum()),
+            transactions=int(r["transactions"].sum()),
+            sales=round(float(r["sales"].sum()), 2),
+            usual_footfall=round(float(ff_grid[h].mean()), 1),
+            usual_transactions=round(float(tx_grid[h].mean()), 1),
+            usual_sales=round(float(sales[h].mean()), 2),
+        )
+
+    at = _clock_hour(clock, today, current)
+    finished = int(at) - 1          # 20.3 (20:18) -> the 19:00 hour
     return LiveView(
-        clock_hour=_clock_hour(clock, today, current),
+        clock_hour=at,
+        last_hour=hour_stats(finished) if 0 <= finished <= 23 else None,
         sales_so_far=round(float(today_cum[23]), 2),
         weekday=WEEKDAYS[today.weekday()],
         days_compared=int(days),

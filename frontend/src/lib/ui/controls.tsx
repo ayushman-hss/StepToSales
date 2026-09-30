@@ -155,6 +155,8 @@ interface SegmentedProps<T extends string> {
   onChange: (value: T) => void;
   options: { value: T; label: string }[];
   label?: string;
+  /** Names the group for screen readers when there is no visible label. */
+  ariaLabel?: string;
   className?: string;
   size?: 'md' | 'sm';
 }
@@ -164,6 +166,7 @@ export function Segmented<T extends string>({
   onChange,
   options,
   label,
+  ariaLabel,
   className,
   size = 'md',
 }: SegmentedProps<T>) {
@@ -172,7 +175,7 @@ export function Segmented<T extends string>({
       {label && <span className="text-small font-medium text-muted">{label}</span>}
       <div
         role="radiogroup"
-        aria-label={label}
+        aria-label={label ?? ariaLabel}
         className="inline-flex flex-wrap gap-1 rounded-control border border-rule bg-white p-1"
       >
         {options.map((opt) => {

@@ -209,9 +209,13 @@ export interface LiveBlock {
 
 export type LiveSpeed = 0 | 1 | 10 | 60 | 300;
 
+export type LiveScenario = 'normal' | 'slow' | 'busy';
+
 export interface LiveStatus {
   running: boolean;
   speed: LiveSpeed;
+  /** Demo day: bends the simulated shop's visitors and buying. */
+  scenario: LiveScenario;
   shop_time: string;
   real_time: string;
   minutes_ahead: number;
@@ -227,4 +231,45 @@ export interface RecentBill {
   amount_paise: number;
   items: number;
   lines: { sku: string; name: string; qty: number; unit_price_paise: number }[];
+}
+
+// ---- phone alerts ----------------------------------------------------------
+
+export type AlertKind =
+  | 'slow_hour'
+  | 'busy_hour'
+  | 'behind_pace'
+  | 'ahead_pace'
+  | 'day_summary'
+  | 'conversion_drop';
+
+export interface AlertChat {
+  id: number;
+  title: string;
+  /** Also gets a short update after every trading hour. */
+  hourly: boolean;
+  linked_at: string;
+}
+
+export interface ShopAlert {
+  id: number;
+  kind: AlertKind;
+  text: string;
+  /** Shop clock (IST) when it was raised. */
+  shop_time: string;
+  /** How many Telegram chats got it; 0 when Telegram is not set up. */
+  delivered: number;
+}
+
+export interface AlertsOverview {
+  telegram: { configured: boolean; bot_username: string | null; error: string | null };
+  chats: AlertChat[];
+  recent: ShopAlert[];
+}
+
+export interface TelegramLink {
+  code: string;
+  url: string | null;
+  bot_username: string | null;
+  expires_at: string;
 }
