@@ -49,3 +49,6 @@ desktop.ini
 # ---- Logs ----
 *.log
 logs/
+.vs/
+
+start.bat

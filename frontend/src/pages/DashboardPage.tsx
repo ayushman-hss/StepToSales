@@ -35,7 +35,9 @@ function freshness(through: string | null): string | null {
 }
 
 const NO_DATA = 'No data for the given filters';
-const LIVE_REFRESH_MS = 4000;
+/** Often enough that at 300x the live chart gets a fresh point every 10 shop
+ *  minutes; the chart glides between points, so it never looks stepped. */
+const LIVE_REFRESH_MS = 2000;
 
 /** Hourly charts show an average day once the range is longer than one. */
 const avgDay = (days: number) => (days > 1 ? ', on an average day' : '');
