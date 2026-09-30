@@ -281,6 +281,35 @@ def test_fast_forward_stops_at_midnight(engine, db, shop):
     assert r.shops["S1"].clock == end_of_day(now)
 
 
+def test_fast_forward_through_a_quiet_night_keeps_its_speed(engine, db, shop):
+    # A fresh database has no live events yet, and nobody visits before 08:00:
+    # fast-forwarding at night must not be mistaken for a demo reset.
+    r = LiveRunner(engine, seed="t")
+    now = ts(0, 30)
+    for _ in range(12):
+        r.step(now=now)
+    r.set_speed("S1", 60)
+    r.step(now=now, dt=60)
+    r.step(now=now, dt=60)
+    assert r.shops["S1"].speed == 60
+    assert r.shops["S1"].clock == ts(2, 30)
+
+
+def test_demo_reset_under_a_fast_forwarded_shop_starts_again(engine, db, shop):
+    r = LiveRunner(engine, seed="t")
+    now = ts(12)
+    for _ in range(12):
+        r.step(now=now)
+    r.set_speed("S1", 60)
+    r.step(now=now, dt=60)
+    assert r.shops["S1"].clock == ts(13)
+    for e in db.exec(select(LiveEvent)).all():     # what reset_demo does
+        db.delete(e)
+    db.commit()
+    r.step(now=now)
+    assert r.shops["S1"].speed == 1                 # a fresh shop state
+
+
 def test_pause_stops_the_clock(engine, db, shop):
     r = LiveRunner(engine, seed="t")
     r.step(now=ts(12))
@@ -486,6 +515,21 @@ def test_dashboard_carries_a_live_block_for_today_only(client):
     past = (TODAY - timedelta(days=3)).isoformat()
     other = client.get(f"/api/dashboard?start_date={past}&end_date={past}", headers=headers)
     assert other.json()["live"] is None
+
+
+def test_dashboard_today_is_the_shops_day_not_the_browsers(client):
+    headers = login(client)
+    client.post("/api/live/bill", headers=headers, json={
+        "event_id": "phone-0006", "lines": [{"sku": "TEA", "qty": 1}]})
+    # A browser in another time zone, or left open past midnight, may send
+    # any date: ?today=true ignores the dates and uses the shop clock.
+    stale = (TODAY - timedelta(days=1)).isoformat()
+    res = client.get(f"/api/dashboard?today=true&start_date={stale}&end_date={stale}",
+                     headers=headers)
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["period"]["end"] == app_runner.shop_now("S1").date().isoformat()
+    assert body["live"] is not None
 
 
 def test_recorded_lines_are_stored_as_json(db, shop):

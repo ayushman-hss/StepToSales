@@ -98,12 +98,15 @@ export async function uploadExcel(file: File): Promise<HoursUploadResult> {
 export interface DashboardParams {
   start_date?: string;
   end_date?: string;
+  /** The shop's today, decided by the server (IST, follows fast-forward). */
+  today?: boolean;
 }
 
 export async function fetchDashboard(params: DashboardParams = {}): Promise<DashboardData> {
   const qs = new URLSearchParams();
   if (params.start_date) qs.set('start_date', params.start_date);
   if (params.end_date) qs.set('end_date', params.end_date);
+  if (params.today) qs.set('today', 'true');
 
   const res = await apiFetch(`/api/dashboard?${qs.toString()}`);
   if (!res.ok) {

@@ -61,6 +61,9 @@ class ShopState:
     calibration: Calibration | None = None
     calibrated_at: datetime | None = None
     calibrated_for: str | None = None
+    #: This shop has live events in the database (found at start, or
+    #: recorded since). If they vanish, the demo data was reset underneath.
+    has_events: bool = False
 
 
 def starting_clock(session: Session, store: Store, now: datetime) -> datetime:
@@ -160,16 +163,23 @@ class LiveRunner:
         with self._lock, Session(self.engine) as session:
             for store in session.exec(select(Store).order_by(Store.code)).all():
                 shop = self.shops.get(store.code)
-                if shop is not None and shop.clock > now and last_event_time(session, store) is None:
-                    # The demo data was reset under a fast-forwarded shop:
-                    # start again from where the fresh history ends.
-                    shop = None
+                if shop is not None and shop.clock > now:
+                    if last_event_time(session, store) is not None:
+                        shop.has_events = True      # e.g. a bill from the till
+                    elif shop.has_events:
+                        # The demo data was reset under a fast-forwarded
+                        # shop: start again from where the fresh history
+                        # ends. (A shop fast-forwarding through quiet night
+                        # hours has simply recorded nothing yet -- that is
+                        # not a reset, and must keep its speed.)
+                        shop = None
                 if shop is None:
                     shop = ShopState(
                         store_id=store.id,
                         code=store.code,
                         clock=starting_clock(session, store, now),
                         rng=random.Random(f"{self.seed}:{store.code}"),
+                        has_events=last_event_time(session, store) is not None,
                     )
                     self.shops[store.code] = shop
                 total += self._advance(session, store, shop, now, dt)
@@ -197,6 +207,7 @@ class LiveRunner:
         shop.clock = target
         if not events:
             return 0
+        shop.has_events = True
         return record(session, store, [IncomingEvent.from_sim(e) for e in events])
 
     def _calibration(self, session: Session, store: Store, shop: ShopState,

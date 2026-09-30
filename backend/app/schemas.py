@@ -142,4 +142,4 @@ class BundleSuggestionOut(BaseModel):
 
 
 class BundleActionIn(BaseModel):
-    price: Optional[float] = None
+    price: Optional[float] = None

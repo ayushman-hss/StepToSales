@@ -57,15 +57,20 @@ export function DashboardPage() {
   // No shop in the request: the server answers for the logged-in one.
   // quiet: a background refresh. No spinner, and a failed refresh keeps the
   // numbers on screen instead of blanking them.
+  const isToday = preset === 'today';
   const load = useCallback(async (quiet = false) => {
     const id = ++latest.current;
     try {
       if (!quiet) setLoading(true);
       setError(null);
-      const d = await fetchDashboard({
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
-      });
+      // Today is the shop's day, which the server knows: the browser's date
+      // is wrong outside IST, and goes stale if the page stays open past
+      // midnight.
+      const d = await fetchDashboard(
+        isToday
+          ? { today: true }
+          : { start_date: startDate || undefined, end_date: endDate || undefined },
+      );
       if (id === latest.current) setData(d);
     } catch (e) {
       if (id !== latest.current || quiet) return;
@@ -76,13 +81,12 @@ export function DashboardPage() {
     } finally {
       if (id === latest.current) setLoading(false);
     }
-  }, [startDate, endDate, setData, setLoading, setError]);
+  }, [isToday, startDate, endDate, setData, setLoading, setError]);
 
   useEffect(() => { load(); }, [load]);
 
   // Live: while looking at today, refresh every few seconds. Other periods
   // are finished history and never change underneath you.
-  const isToday = preset === 'today';
   useEffect(() => {
     if (!isToday) return;
     const id = window.setInterval(() => load(true), LIVE_REFRESH_MS);

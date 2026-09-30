@@ -148,10 +148,16 @@ def _load_df(
 def get_dashboard(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
+    today: bool = Query(False, description="Ignore the dates: the shop's today (IST)"),
     session: Session = Depends(get_session),
     store: Store = Depends(get_current_store),
 ):
     store_code = store.code
+    if today:
+        # "Today" is the shop's day, not the browser's: the shop clock is IST
+        # (and may be fast-forwarded), while a browser can sit in any time
+        # zone or be left open past midnight.
+        start_date = end_date = runner.shop_now(store_code).date().isoformat()
     df = _load_df(session, store_code, start_date, end_date)
     if df.empty:
         raise HTTPException(404, "No data for the given filters")
@@ -272,4 +278,4 @@ def list_stores(store: Store = Depends(get_current_store)):
 @router.get("/health")
 def health(session: Session = Depends(get_session)):
     has_data = session.exec(select(HourlyData).limit(1)).first() is not None
-    return {"ok": True, "has_data": has_data}
+    return {"ok": True, "has_data": has_data}
