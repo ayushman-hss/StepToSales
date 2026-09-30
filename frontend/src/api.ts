@@ -1,6 +1,7 @@
 import type { DashboardData } from './types';
 import type { Product, BundleSuggestion } from './types';
 import type { PoolDetail, PoolStrategy, PoolEvent as PoolEventRow } from './types';
+import type { LiveSpeed, LiveStatus, RecentBill } from './types';
 import { useAuth, type Me } from './auth';
 
 // ---- auth ---------------------------------------------------------------
@@ -252,4 +253,60 @@ export async function reopenPool(
 
 export async function fetchPoolEvents(code: string): Promise<PoolEventRow[]> {
   return poolJson(await apiFetch(`/api/pools/${code}/events`));
+}
+
+// ---- live mode ------------------------------------------------------------
+
+export async function fetchLiveStatus(): Promise<LiveStatus> {
+  return poolJson(await apiFetch('/api/live/status'));
+}
+
+export async function setLiveSpeed(speed: LiveSpeed): Promise<LiveStatus> {
+  return poolJson(
+    await apiFetch('/api/live/speed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ speed }),
+    }),
+  );
+}
+
+/** One id per bill, made on the phone, so a retried tap is counted once. */
+export function newEventId(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+export interface TillReceipt {
+  recorded: boolean;
+  amount_paise: number;
+  at: string;
+}
+
+export async function ringBill(
+  eventId: string,
+  lines: { sku: string; qty: number }[],
+): Promise<TillReceipt> {
+  return poolJson(
+    await apiFetch('/api/live/bill', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_id: eventId, lines }),
+    }),
+  );
+}
+
+export async function countVisitor(eventId: string): Promise<TillReceipt> {
+  return poolJson(
+    await apiFetch('/api/live/visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_id: eventId }),
+    }),
+  );
+}
+
+export async function fetchRecentBills(limit = 8): Promise<RecentBill[]> {
+  return poolJson(await apiFetch(`/api/live/bills?limit=${limit}`));
 }

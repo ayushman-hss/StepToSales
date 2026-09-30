@@ -99,3 +99,29 @@ class BundleSuggestion(SQLModel, table=True):
     status: str = Field(default="pending")
     approved_price: Optional[float] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class LiveEvent(SQLModel, table=True):
+    """One thing that happened in a shop: a visitor came in, or a bill was rung.
+
+    The append-only source of truth for live mode. The live rows in
+    ``hourly_data`` and ``sale_line`` are derived from these and can always be
+    rebuilt from them, so the dashboard and the bundle engine cannot disagree.
+    """
+    __tablename__ = "live_event"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    #: Idempotency key: a retried request with the same id is ignored.
+    event_id: str = Field(index=True, unique=True)
+    store_id: int = Field(foreign_key="store.id", index=True)
+    kind: str = Field(index=True)            # "visit" | "bill"
+    source: str = "sim"                      # "sim" | "pos"
+    #: Shop-local (IST) wall-clock time, naive -- the same clock as the
+    #: date/hour strings in hourly_data. date and hour are copied out of it
+    #: so a rollup is one indexed lookup.
+    ts: datetime = Field(index=True)
+    date: str = Field(index=True)            # YYYY-MM-DD, IST
+    hour: int
+    #: Bills only. Integer paise, never float.
+    amount_paise: int = 0
+    #: Bills only: JSON list of {"sku", "qty", "unit_price_paise"}.
+    lines: str = "[]"

@@ -41,8 +41,9 @@ from app.services.bundles import generate_suggestions
 
 from app.models import (
     Store, Upload, HourlyData, SaleLine, Product, BundleSuggestion, StoreUser,
-    AuthSession,
+    AuthSession, LiveEvent,
 )
+from app.services.live.engine import LIVE_UPLOAD
 from app.services.auth import hash_password, normalise_username
 
 import generate_bundle_sample
@@ -298,11 +299,21 @@ def main() -> None:
     init_db()
     with Session(engine) as session:
         print("Resetting demo data...")
+        # Live events are rebuilt on top of fresh history, never kept across a
+        # reset: they would sit in hours the new history already covers.
+        session.execute(sa_delete(LiveEvent))
+        session.commit()
         load_hourly(session)
         for code in STORES:
             load_store(session, code)
         load_pools(session)
-        load_users(session)   # ← new
+        load_users(session)
+        live = session.exec(select(Upload).where(Upload.filename == LIVE_UPLOAD)).first()
+        if live is not None:
+            session.execute(sa_delete(SaleLine).where(SaleLine.upload_id == live.id))
+            session.execute(sa_delete(HourlyData).where(HourlyData.upload_id == live.id))
+            session.delete(live)
+            session.commit()
         print("Done.")
 
 

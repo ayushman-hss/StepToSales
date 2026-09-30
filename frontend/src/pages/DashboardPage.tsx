@@ -9,6 +9,8 @@ import { FootfallSalesChart } from '../components/FootfallSales';
 import { ConversionChart } from '../components/ConversionChart';
 import { Heatmap } from '../components/Heatmap';
 import { FeatureSwitcher } from '../components/FeatureSwitcher';
+import { LivePanel } from '../components/LivePanel';
+import { LiveStrip } from '../components/LiveStrip';
 import {
   EmptyState,
   Notice,
@@ -33,6 +35,7 @@ function freshness(through: string | null): string | null {
 }
 
 const NO_DATA = 'No data for the given filters';
+const LIVE_REFRESH_MS = 4000;
 
 /** Hourly charts show an average day once the range is longer than one. */
 const avgDay = (days: number) => (days > 1 ? ', on an average day' : '');
@@ -50,10 +53,12 @@ export function DashboardPage() {
   const latest = useRef(0);
 
   // No shop in the request: the server answers for the logged-in one.
-  const load = useCallback(async () => {
+  // quiet: a background refresh. No spinner, and a failed refresh keeps the
+  // numbers on screen instead of blanking them.
+  const load = useCallback(async (quiet = false) => {
     const id = ++latest.current;
     try {
-      setLoading(true);
+      if (!quiet) setLoading(true);
       setError(null);
       const d = await fetchDashboard({
         start_date: startDate || undefined,
@@ -61,7 +66,7 @@ export function DashboardPage() {
       });
       if (id === latest.current) setData(d);
     } catch (e) {
-      if (id !== latest.current) return;
+      if (id !== latest.current || quiet) return;
       const msg = e instanceof Error ? e.message : 'Unknown error';
       // An empty period is not an error -- nothing has been sold yet.
       setError(msg === NO_DATA ? null : msg);
@@ -72,6 +77,15 @@ export function DashboardPage() {
   }, [startDate, endDate, setData, setLoading, setError]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Live: while looking at today, refresh every few seconds. Other periods
+  // are finished history and never change underneath you.
+  const isToday = preset === 'today';
+  useEffect(() => {
+    if (!isToday) return;
+    const id = window.setInterval(() => load(true), LIVE_REFRESH_MS);
+    return () => window.clearInterval(id);
+  }, [isToday, load]);
 
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -106,6 +120,8 @@ export function DashboardPage() {
 
       <div className="space-y-8">
         <FilterBar />
+
+        {isToday && <LiveStrip />}
 
         {loading && !data && <p className="text-small text-muted">Loading&hellip;</p>}
         {error && <Notice>{error}</Notice>}
@@ -142,6 +158,8 @@ export function DashboardPage() {
                 Latest bills: {freshness(data.data_through)}
               </p>
             )}
+
+            {data.live && <LivePanel live={data.live} />}
 
             <KpiCards
               kpis={data.kpis}

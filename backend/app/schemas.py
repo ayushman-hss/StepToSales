@@ -64,6 +64,37 @@ class Comparison(BaseModel):
     sales: float
 
 
+class LiveBandPoint(BaseModel):
+    hour: int
+    p10: float
+    p50: float
+    p90: float
+    actual: Optional[float] = None
+
+
+class LiveHourNow(BaseModel):
+    hour: int
+    footfall: int
+    transactions: int
+    sales: float
+    usual_footfall: float
+    usual_transactions: float
+    usual_sales: float
+
+
+class LiveBlock(BaseModel):
+    """Today against the same weekday in past weeks. Only for "today"."""
+    weekday: str
+    days_compared: int
+    band: List[LiveBandPoint]
+    now: Optional[LiveHourNow] = None
+    pace: Optional[float] = None
+    pace_through_hour: Optional[int] = None
+    projected_sales: Optional[float] = None
+    typical_sales: float
+    alert: Optional[str] = None
+
+
 class DashboardResponse(BaseModel):
     kpis: Kpis
     hourly: List[HourlyPoint]
@@ -75,6 +106,7 @@ class DashboardResponse(BaseModel):
     #: Latest date and hour with data for this shop filter, e.g. "2026-09-21T14".
     data_through: Optional[str] = None
     compare: Optional[Comparison] = None
+    live: Optional[LiveBlock] = None
 
 class ProductIn(BaseModel):
     sku: str
