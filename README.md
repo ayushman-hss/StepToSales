@@ -1,27 +1,56 @@
-# StepToSale
+<<<<<<< telegram-alerts
+# StepToSales
 
 [![codecov](https://codecov.io/github/ayushman-hss/StepToSale/graph/badge.svg?token=JQS7H5KRVD)](https://codecov.io/github/ayushman-hss/StepToSale)
 
 **Retail analytics for small neighbourhood shops.**
 
-StepToSale is a retail intelligence platform built around a simple question:
+StepToSales is a retail intelligence platform built around a simple question:
 
 > **Are you above the line?**
+
 For a small shop, that question can mean very different things:
 
 - Are enough of the people entering the shop actually buying?
 - Which products are naturally bought together?
 - Can nearby shops combine demand to unlock better wholesale prices?
 
-StepToSale turns ordinary retail data into actionable answers across all three.
+StepToSales turns ordinary retail data into actionable answers across all three, and then keeps watching the shop's day as it happens, messaging the owner's phone when an hour goes slow or the day falls behind.
 
-Built with **Python + FastAPI + PostgreSQL** on the backend and **React + TypeScript + Vite** on the frontend.
+Built with **Python + FastAPI + PostgreSQL** on the backend and **React + TypeScript + Vite** on the frontend, shipped as one Docker image.
+
+## Live demo
+
+**https://steptosales.onrender.com**
+
+| Username | Password | Shop |
+|---|---|---|
+| `s1` | `s1shop` | S1, residential kirana |
+| `s2` | `s2shop` | S2, station kiosk |
+| `s3` | `s3shop` | S3, pool-only shop (no sales data) |
+
+A quick tour:
+
+1. Log in as `s2`, open **Sales vs footfall** and pick **Today**. The shop is trading live, and a live strip appears above the charts.
+2. In the live strip, set **Demo day** to *Slow* and the speed to **60×**. Within about a minute the next hour ends and a *Slow hour* alert appears under **Phone alerts** (linked from the strip).
+3. On **Phone alerts**, type a question into *Ask about your shop*, e.g. *what sold most today?* or *aaj kitna becha*.
+4. Tap **Open the till** (`/pos`) on a phone, logged in as the same shop, and ring up a bill. It shows on the dashboard within seconds.
+
+The demo runs on Render's free plan: after 15 minutes without visitors it sleeps, and the first visit then takes about a minute to wake it. See [Hosting](#hosting).
 
 ---
 
-## What StepToSale does
+## What StepToSales does
 
-StepToSale currently contains three retail analytics tools.
+StepToSales contains three retail analytics tools, plus a live layer on top of them:
+
+| | Question it answers | Where |
+|---|---|---|
+| **1. Sales vs Footfall** | People are coming in. Are they buying? | Sales vs footfall |
+| **2. Bundles** | What do customers already buy together? | Bundles |
+| **3. Group Buying** | Can nearby shops get a better wholesale price together? | Group buying |
+| **4. Live mode** | How is today going, right now? | Sales vs footfall → Today, the till |
+| **5. Phone alerts & questions** | Tell me when something needs attention, and answer my questions in plain words. | Phone alerts, Telegram |
 
 ### 1. Sales vs Footfall
 
@@ -52,7 +81,7 @@ A POS system knows who bought something.
 
 It does not know how many people walked past the counter, entered the shop and left without buying.
 
-StepToSale therefore models footfall separately and uses it to expose opportunities that sales data alone cannot show.
+StepToSales therefore models footfall separately and uses it to expose opportunities that sales data alone cannot show.
 
 ---
 
@@ -60,7 +89,7 @@ StepToSale therefore models footfall separately and uses it to expose opportunit
 
 **"What are my customers already buying together?"**
 
-StepToSale analyses transaction line items using **market-basket analysis**.
+StepToSales analyses transaction line items using **market-basket analysis**.
 
 It looks for product pairs that occur together more frequently than would be expected by chance.
 
@@ -120,7 +149,7 @@ The technical problem then becomes:
 
 > **How should the resulting saving be divided?**
 
-StepToSale calculates multiple allocation methods, including:
+StepToSales calculates multiple allocation methods, including:
 
 - Flat unit price
 - Pro-rata allocation
@@ -139,18 +168,57 @@ Every state transition is also recorded in an append-only event log, allowing a 
 
 ---
 
+### 4. Live mode
+
+**"How is today going, right now?"**
+
+The first three tools look back at history. Live mode keeps each shop trading while the app runs: visitors arrive, some of them buy, and the dashboard's **Today** view moves every couple of seconds.
+
+The simulated day is learned from the shop's own last eight weeks, so it lands inside that shop's usual range. The dashboard shows:
+
+- pace against a usual same weekday, by the same time of day,
+- likely takings by closing,
+- the hour in progress against its usual,
+- a band showing the usual range of cumulative sales, with today's line gliding along it.
+
+A speed control (Pause, Real time, 10×, 60×, 300×) runs a whole day in minutes for a demo, and a **Demo day** switch makes the rest of the day *Slow* or *Busy* on demand. A phone **till** (`/pos`) rings up real bills into the same stream.
+
+Details in [7. Live mode](#7-live-mode).
+
+---
+
+### 5. Phone alerts and questions
+
+**"Tell me when something needs my attention."**
+
+A shopkeeper is behind the counter, not in front of a dashboard. StepToSales watches each shop's day and sends a Telegram message when:
+
+- an hour is **slow** (far fewer visitors than usual, or far fewer of them buying, and it says which),
+- an hour is **busy**,
+- the day is well **behind** or **ahead** of a usual one,
+- the day is over (a **summary**),
+- and, if the owner opts in, after **every hour**.
+
+The owner can also just ask, in English or everyday Hinglish: *how much did I sell today?*, *what sold most this week?*, *aaj kitna becha*, *how can I improve sales?* The answers come from the shop's own numbers, compared like with like.
+
+The assistant is **rule-based and runs entirely on the server**. No AI service is called, so neither the questions nor the shop's figures leave it.
+
+Details in [8. Phone alerts (Telegram)](#8-phone-alerts-telegram).
+
+---
+
 # Architecture
 
-StepToSale separates the user interface, API layer, retail analytics, group-buying domain logic and persistence.
+StepToSales separates the user interface, API layer, retail analytics, group-buying domain logic, the live layer and persistence.
 
-![StepToSale system architecture](docs/architecture.png)
+![StepToSales system architecture](docs/architecture.png)
 
-*Architecture diagram generated from the repository structure using GitDiagram.*
+*Architecture diagram generated from the repository structure using GitDiagram. It predates live mode and phone alerts; the request flow below is current.*
 
 ### Request flow
 
 ```text
-Store Operator
+Store Operator (browser, phone till)
       │
       ▼
 React Application
@@ -161,23 +229,26 @@ Typed API Client
       ▼
 FastAPI Routes
       │
-      ├─────────────────────┐
-      ▼                     ▼
-Retail Analytics       Group Buying
-      │                     │
-      │                     ├── Price Tiers
-      │                     ├── Money Arithmetic
-      │                     └── Savings Allocation
-      │
-      ├── Metrics
-      ├── Insights
-      ├── Associations
-      ├── Pricing
-      └── Bundles
-              │
-              ▼
-         PostgreSQL
+      ├──────────────────────┬──────────────────────┐
+      ▼                      ▼                      ▼
+Retail Analytics        Group Buying           Live layer
+      │                      │                      │
+      ├── Metrics            ├── Price Tiers        ├── Simulator
+      ├── Insights           ├── Money Arithmetic   ├── Event engine
+      ├── Associations       └── Savings            ├── Pace
+      ├── Pricing                Allocation         └── Background runner
+      └── Bundles                                          │
+              │                                            ▼
+              ▼                                 Alert watcher + Telegram bot
+         PostgreSQL                                        │
+                                                    ├── Alert rules
+                                                    └── Assistant (plain questions)
+                                                           │
+                                                           ▼
+                                                  Shop owner's phone
 ```
+
+The live runner and the alert watcher are background tasks inside the API process, so the whole app is one process and one database.
 
 ### Separation of responsibilities
 
@@ -197,6 +268,10 @@ The analytics layer contains independent services for metrics, insights, market-
 
 Group buying has a separate domain layer responsible for tier calculations, money arithmetic and savings allocation. This keeps the financial rules independent from the HTTP/API layer.
 
+**Live layer**
+
+The simulator, the event engine (which records every visit and bill once and recomputes the hourly rollups from them) and the pace calculations live in `services/live`. The alert rules, the Telegram client and the watcher live in `services/alerts`; the plain-language assistant lives in `services/assistant`. None of them depends on FastAPI, so they are tested directly.
+
 **Persistence**
 
 PostgreSQL stores the retail and pooling models, while repositories handle persistence for the group-buying domain.
@@ -209,7 +284,7 @@ A common problem with synthetic dashboards is:
 
 > **Random numbers that happen to look like business data.**
 
-StepToSale instead generates synthetic retail data using explicit behavioural assumptions.
+StepToSales instead generates synthetic retail data using explicit behavioural assumptions.
 
 This is **not claimed to be a statistically representative dataset of Indian retail**.
 
@@ -371,7 +446,7 @@ Store format
        │           │
        └─────┬─────┘
              ▼
-       StepToSale analytics
+       StepToSales analytics
 ```
 
 This is particularly useful for a demo because the dataset has **known underlying behaviour**.
@@ -530,7 +605,7 @@ This means the dashboard's transaction and sales values originate from the same 
 
 Retail analytics becomes useless if the numbers do not reconcile.
 
-StepToSale therefore treats financial correctness as a first-class concern.
+StepToSales therefore treats financial correctness as a first-class concern.
 
 ### Integer money
 
@@ -573,13 +648,21 @@ Changing a supplier's prices later therefore cannot rewrite the financial histor
 - Alembic
 - Pytest
 - Pandas
+- Telegram Bot API (through the standard library, no bot framework)
 
 ### Frontend
 
-- React
+- React 19
 - TypeScript
 - Vite
+- Tailwind CSS
+- Zustand (state)
 - ECharts
+
+### Hosting
+
+- Docker (one image: the API serves the built website)
+- Render (blueprint in `render.yaml`)
 
 ### Analytics
 
@@ -590,29 +673,39 @@ Changing a supplier's prices later therefore cannot rewrite the financial histor
 - Tiered supplier pricing
 - Pro-rata allocation
 - Shapley allocation
+- Pace against a usual weekday, by the same time of day
+- Alert rules for slow and busy hours and the day's pace
+- Rule-based English and Hinglish question parsing
 
-The current analytics do **not require machine learning**.
+The current analytics do **not require machine learning**, and nothing is sent to an outside AI service.
 
 ---
 
 # Project structure
 
 ```text
-StepToSale/
+StepToSales/
 │
 ├── backend/
 │   ├── app/
-│   │   ├── main.py              FastAPI application
+│   │   ├── main.py              FastAPI application; starts the live runner and
+│   │   │                        alert watcher, serves the built website
+│   │   ├── config.py            Settings from environment / backend/.env
 │   │   ├── dependencies.py      Login check shared by every shop route
-│   │   ├── models.py            Retail and login SQLModel tables
+│   │   ├── models.py            Retail, login, live and alert SQLModel tables
 │   │   ├── models_pooling.py    Group-buying SQLModel tables
+│   │   ├── live.py              The one live runner for this process
+│   │   ├── alerts.py            The one alert watcher and Telegram bot
 │   │   │
 │   │   ├── routers/
 │   │   │   ├── auth.py          Login, logout and "who am I"
-│   │   │   ├── dashboard.py     Dashboard API routes
+│   │   │   ├── dashboard.py     Dashboard API routes (with today's live pace)
 │   │   │   ├── bundles.py       Bundle API routes
 │   │   │   ├── products.py      Product API routes
-│   │   │   └── pools.py         Group-buying API routes
+│   │   │   ├── pools.py         Group-buying API routes
+│   │   │   ├── live.py          Live status, speed, demo day and the till
+│   │   │   ├── alerts.py        Phone alerts: connect Telegram, list alerts
+│   │   │   └── assistant.py     "Ask about your shop"
 │   │   │
 │   │   └── services/
 │   │       ├── auth.py          Password hashing and sessions
@@ -621,21 +714,28 @@ StepToSale/
 │   │       ├── associations.py  Market-basket analysis
 │   │       ├── pricing.py       Margin-floor bundle pricing
 │   │       ├── bundles.py       Bundle generation
-│   │       └── pooling/         Group-buying domain logic
+│   │       ├── pooling/         Group-buying domain logic
+│   │       ├── live/            Simulator, event engine, pace, background runner
+│   │       ├── alerts/          Alert rules, Telegram client, watcher and bot
+│   │       └── assistant/       Plain-language question parsing and answers
 │   │
 │   ├── alembic/                 Database migrations
 │   ├── scripts/
 │   │   ├── generate_bundle_sample.py
 │   │   ├── generate_sample.py
 │   │   ├── create_user.py       Add a shop login or reset its password
-│   │   └── reset_demo.py
+│   │   ├── demo_pool.py         Walk through a group-buying pool on the console
+│   │   ├── reset_demo.py        Rebuild the demo data and logins
+│   │   ├── boot.py              Container start: seed an empty database or migrate
+│   │   └── start.sh             Container entry point
 │   │
 │   └── tests/                   Backend tests
 │
 ├── frontend/
 │   └── src/
-│       ├── pages/               Application pages
-│       ├── components/          Feature-specific components
+│       ├── pages/               Dashboard, Products, Bundles, Group buying,
+│       │                        Till, Phone alerts, Login
+│       ├── components/          Feature-specific components (live panel, ask box...)
 │       ├── lib/
 │       │   ├── ui/              Design system
 │       │   └── charts/          ECharts configuration
@@ -644,8 +744,12 @@ StepToSale/
 │       └── store.ts             Dashboard filter state
 │
 ├── docs/
-│   └── architecture.png        System architecture diagram
+│   └── architecture.png         System architecture diagram
 │
+├── Dockerfile                   One image: builds the website, runs the API
+├── render.yaml                  Render blueprint (web service + Postgres)
+├── docker-compose.yaml          Local PostgreSQL
+├── start.bat                    One-click local start on Windows
 └── README.md
 ```
 
@@ -656,9 +760,27 @@ StepToSale/
 ## Prerequisites
 
 - Python 3.11+
-- Node.js 18+
+- Node.js 20.19+ (22 recommended; Vite 8 needs it)
 - PostgreSQL 15+
 - Docker (optional)
+
+---
+
+## Quick start on Windows: `start.bat`
+
+Once the one-time setup below is done (PostgreSQL running, `backend\.venv`
+created and `backend\.env` filled in), double-click **`start.bat`** in the
+repository root. It:
+
+1. stops anything still running from last time,
+2. runs `alembic upgrade head`,
+3. resets the demo data (`start.bat keep` keeps today's live data instead),
+4. installs the frontend packages on the first run,
+5. starts the API and the website in their own windows,
+6. opens Chrome at `http://localhost:5173/login`.
+
+To stop, close the *StepToSales API* and *StepToSales Web* windows. The steps
+below are the same thing by hand, for any OS.
 
 ---
 
@@ -716,13 +838,20 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Create the environment file:
+Create the environment file (the example lives in the repository root; the
+app reads `backend/.env`):
 
 ```bash
-cp .env.example .env
+cp ../.env.example .env
 ```
 
-Update `DATABASE_URL` if necessary.
+On Windows PowerShell: `Copy-Item ..\.env.example .env`.
+
+Update `DATABASE_URL` if necessary, and add `TELEGRAM_BOT_TOKEN` if you want
+phone alerts (see [8. Phone alerts](#8-phone-alerts-telegram)).
+
+If you'll run the tests, install the test tools too:
+`pip install -r requirements-dev.txt`.
 
 Run migrations:
 
@@ -824,7 +953,10 @@ few seconds. Nothing to start separately.
 - **Speed control on the dashboard**: Pause, Real time, 10×, 60×, 300×.
   Fast-forward runs the shop's clock ahead of real time and stops at
   midnight. Back at Real time, the shop waits for the real clock to catch up.
-- **Till** (`/pos`): log in on a phone as the same shop, tap products, ring
+- **Demo day** (in the live strip): *Usual*, *Slow* or *Busy* for the rest of
+  the simulated day, to show the phone alerts for a bad or a good day on
+  demand.
+- **Till** (`/pos`, *Open the till* in the live strip): log in on a phone as the same shop, tap products, ring
   up. The bill is priced from that shop's price list and appears on the
   dashboard within seconds. Every bill also counts one visitor.
 - **How today is going**: pace against a usual weekday (finished hours only),
@@ -854,6 +986,94 @@ and open the address Vite prints for your network.
 
 ---
 
+## 8. Phone alerts (Telegram)
+
+The API watches every shop's day and messages its phone when something is
+worth knowing:
+
+- **Slow hour**: in the hour that just ended, far fewer people came in than
+  usual (60% or less), or far fewer of them bought (under 60% of the usual
+  share, with at least 8 visitors). Says which, because the fixes differ.
+- **Busy hour**: the hour took at least 1.5× its usual, with 5 or more bills.
+- **Behind pace** / **Strong day**: the day is 25% behind or 20% ahead of a
+  usual weekday, once a quarter of a usual day's takings should be in. Once a
+  day each.
+- **Day's summary**: after the shop's usual closing time: takings against a
+  usual day, bills and visitors, the best hour.
+- **Hourly updates** (opt-in per chat): a short line after every trading
+  hour, with the day so far.
+
+At most one hourly message per hour. An ordinary day stays quiet on purpose.
+
+Every alert is listed on the **Phone alerts** page (`/alerts`, linked from the
+live strip on the dashboard), sent or not. With a Telegram bot set up, each
+one is also sent to every chat connected to that shop.
+
+**Seeing it in a demo.** The live strip has a **Demo day** switch: *Usual*,
+*Slow* (half the visitors, under half the buying) or *Busy* (1.7× visitors,
+more buying). Pick Slow or Busy, then 60×: the next hour that ends sends a
+Slow hour or Busy hour alert, about a minute later.
+
+**Set up the bot (once, about two minutes):**
+
+1. In Telegram, message **@BotFather**, send `/newbot`, and pick a name and a
+   username ending in `bot`.
+2. Put the token it gives you in `backend/.env`:
+
+   ```text
+   TELEGRAM_BOT_TOKEN=123456789:AA...
+   ```
+
+3. Restart the backend (or run `start.bat` again).
+
+**Connect a phone:** log in as the shop, open **Phone alerts**, tap **Connect
+Telegram** and press **Start** in the chat that opens. On another phone, send
+the bot the `/start <code>` shown on the page; the code works once, for 15
+minutes. A group works too: add the bot to the group and send the same
+`/start <code>` there. In the chat:
+
+- `/status`: how today is going, right now, and the last hour.
+- `/hourly`: hourly updates on or off (also a tick box on the page).
+- `/stop`: stop alerts to that chat.
+- `/help`: the list. Typing `/` in the chat shows the same menu.
+
+**Ask it anything, in plain words.** Any message that isn't a command is a
+question about the shop, answered from its own data. The same assistant is on
+the Phone alerts page (*Ask about your shop*), so it can be tried without
+Telegram. It understands English and everyday Hinglish, for example:
+
+- *How much did I sell today?* / *aaj kitna becha* / *kal ki sale*
+- *What sold most this week?* / *which products are not selling?*
+- *How many people came in yesterday evening?* / *sales between 5 and 8 pm*
+- *How many Maggi today?* / *paneer vs butter this week* / *price of tea*
+- *Compare today with yesterday* / *how are sales compared to last week?*
+- *Busiest hour?* / *which day is slow?* / *when should I run an offer?*
+- *Profit last week* / *average bill yesterday* / *biggest bill today*
+- *How can I improve sales?* (tips built from the shop's own numbers)
+
+Periods it knows: today, yesterday, a weekday, a date (*25 Sept*, *25/9*), a
+month name, this/last week or month, *last 7 days*; and parts of the day
+(morning, evening, *at 6pm*, *between 10 and 12*). Every figure is compared
+like with like: today so far against a usual same weekday *by the same time*,
+a week against the week before.
+
+It is rule-based and runs entirely on the server (`services/assistant/`):
+no AI service is called, so neither the questions nor the shop's figures
+leave it, and it costs nothing to run. The trade-off is that an unusual
+wording gets a list of example questions instead of an answer.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | *(empty)* | From @BotFather. Empty: alerts are listed on the page but not sent. |
+| `ALERTS_ENABLED` | `true` | Run the alert watcher. Like the simulator, in **one** API process only. |
+
+A bot can only be read by one running copy of the app. If the laptop and a
+hosted copy both use the same token, the page shows a warning; give each its
+own bot. `reset_demo.py` clears the alert list (so the day raises them again)
+but keeps connected chats.
+
+---
+
 # Hosting
 
 The app ships as **one Docker image**: the website is built into it and the
@@ -862,17 +1082,21 @@ CORS to set up. It needs a Postgres database and a host that keeps **one**
 process running (the live simulator and the Telegram bot live in it).
 
 On start the container runs `scripts/boot.py`: an empty database gets the demo
-data (about 15 seconds, once); an existing one gets `alembic upgrade head`.
+data (once, on the first start); an existing one gets `alembic upgrade head`.
 Redeploys and restarts keep today's live trading, alerts and connected phones.
 
 ## Render (free, about 10 minutes)
 
 `render.yaml` describes the whole setup: a free web service and a free
-Postgres database, both in Singapore.
+Postgres database, both in Singapore. The live demo at
+[steptosales.onrender.com](https://steptosales.onrender.com) is deployed this
+way from `main`.
 
-1. Push the branch you want to host to GitHub (Render builds from GitHub).
+1. Push the branch you want to host to GitHub (Render builds from GitHub, and
+   redeploys on every push to that branch).
 2. On [render.com](https://render.com), sign in with GitHub, then
-   **New → Blueprint**, pick this repository and the branch, **Apply**.
+   **New → Blueprint**, pick this repository and the branch (`main`), enter
+   `render.yaml` as the blueprint path, **Apply**.
 3. When it asks for `TELEGRAM_BOT_TOKEN`, paste the bot's token, or leave it
    empty to run without phone alerts.
 4. Wait for the first build (a few minutes). The address is shown at the top
@@ -886,11 +1110,21 @@ Free plan limits, so a demo isn't surprised by them:
   Telegram; on waking, each shop catches up on the missed hours. To keep it
   awake for a demo day, point a free uptime checker (UptimeRobot,
   cron-job.org) at `https://<your-address>/api/health` every 10 minutes.
-- **The free database expires after 30 days.** Upgrade it, or create a new
-  one before then.
+- **750 free instance hours a month**, shared by all free services in the
+  workspace. Kept awake all month, one service uses nearly all of them; past
+  the limit it is suspended until the month ends. Render may also restart a
+  free service at any time (the shops then catch up, as after any restart).
+- **The free database expires after 30 days**, with a 14-day grace period
+  before it is deleted. It has a 1 GB limit and no backups. Upgrade it, or
+  point `DATABASE_URL` at another Postgres (for example a Neon or Supabase
+  free database) before then; `boot.py` loads the demo data into the new one.
 - **Only one copy may use a bot token.** While the hosted app has the token,
   remove `TELEGRAM_BOT_TOKEN` from your laptop's `backend/.env` (or give the
   laptop its own bot), otherwise the two fight over the bot's messages.
+
+If a build fails, the error is at the end of the deploy's log; the runtime
+errors (a traceback, `live tick failed`, `alert check failed`) are under the
+service's **Logs**.
 
 For no sleeping, the paid Starter plan (or any host that runs a container
 all the time, such as Railway, Fly.io or a small VM) works with the same image.
@@ -921,7 +1155,7 @@ pip install -r requirements-dev.txt
 python -m pytest tests/ -q
 ```
 
-The current suite contains **178 tests** covering areas including:
+The current suite contains **450 tests** covering areas including:
 
 - Supplier tiers
 - Pool lifecycle
@@ -929,6 +1163,13 @@ The current suite contains **178 tests** covering areas including:
 - Allocation rules
 - Settlement invariants
 - Property-based checks
+- Logins and shop isolation
+- Live mode: the simulator, catching up after downtime, speed and demo day, reconciliation of live events with the hourly and sale-line tables
+- Phone alerts: each rule, de-duplication, the Telegram link flow (with Telegram replaced by a fake)
+- The assistant: English and Hinglish questions, periods, products and comparisons
+- Hosting configuration (`DATABASE_URL` forms)
+
+The tests use in-memory SQLite, so no database needs to be running.
 
 One of the core financial invariants is:
 
@@ -942,7 +1183,7 @@ If that invariant cannot be satisfied, the settlement should fail rather than pr
 
 # Current limitations
 
-StepToSale is deliberately not pretending to be a complete retail ERP or payment platform.
+StepToSales is deliberately not pretending to be a complete retail ERP or payment platform.
 
 The following areas are currently modelled at the domain layer but are not fully implemented in the UI/infrastructure.
 
@@ -966,20 +1207,32 @@ The current interface focuses on one active pool for simplicity.
 
 ### Notifications
 
-The event log records events such as:
+Shops get Telegram alerts about their day (see [Phone alerts](#8-phone-alerts-telegram)). Group buying does not use them yet: the pool event log records events such as:
 
 ```text
 pool crossed a tier
 pool approaching closure
 ```
 
-but no notification service currently dispatches them.
+but nothing sends them to the shops yet.
 
 ### Concurrency
 
 Orders are validated before being written, but optimistic locking is not currently implemented.
 
 Two shops committing simultaneously could therefore theoretically price against stale tier information.
+
+### Live data is simulated
+
+Live mode's visitors and most of its bills come from the simulator. The only real input is the phone till. There is no footfall sensor or POS integration yet.
+
+### The assistant is rule-based
+
+It understands the phrasings it was built for, in English and everyday Hinglish. An unusual wording gets a list of example questions instead of an answer. This is the price of keeping the shop's data on the server.
+
+### One process, free hosting
+
+The live simulator and the Telegram bot run inside the API process, so the app runs as exactly one instance. On Render's free plan that instance sleeps when nobody visits, and while it sleeps no alerts are sent.
 
 ### Synthetic data
 
@@ -998,7 +1251,7 @@ Potential next steps include:
 - Promotion-aware demand simulation
 - Supplier-facing portal
 - Multi-pool management
-- Notifications
+- Group-buying notifications (Telegram is already in place for shop alerts)
 - Optimistic concurrency control
 - Real POS integrations
 - Real supplier integrations
@@ -1010,9 +1263,9 @@ Potential next steps include:
 
 # What makes the project interesting
 
-StepToSale is not just a dashboard showing sales charts.
+StepToSales is not just a dashboard showing sales charts.
 
-The three features operate at different levels of the same retail problem:
+The three analytics features operate at different levels of the same retail problem:
 
 ```text
                     RETAIL DECISIONS
@@ -1034,6 +1287,8 @@ The three features operate at different levels of the same retail problem:
 The project therefore moves from:
 
 **understanding demand → increasing basket value → reducing procurement cost.**
+
+Live mode and phone alerts then take that analysis to where the shopkeeper actually is: behind the counter, with a phone, in the middle of the day.
 
 ---
 
