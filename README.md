@@ -1,4 +1,3 @@
-<<<<<<< telegram-alerts
 # StepToSales
 
 [![codecov](https://codecov.io/github/ayushman-hss/StepToSale/graph/badge.svg?token=JQS7H5KRVD)](https://codecov.io/github/ayushman-hss/StepToSale)
