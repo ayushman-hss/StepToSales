@@ -1,6 +1,8 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlmodel import Session, select
+
 from ..db import get_session
+from ..dependencies import get_current_store
 from ..models import Product, Store
 from ..schemas import ProductOut
 from ..services.parser import parse_product_catalog
@@ -19,14 +21,11 @@ def _to_out(p: Product) -> ProductOut:
 
 @router.post("/upload")
 async def upload_catalog(
-    store_id: str,
     file: UploadFile = File(...),
+    current: Store = Depends(get_current_store),
     session: Session = Depends(get_session),
 ):
-    store = session.exec(select(Store).where(Store.code == store_id)).first()
-    if not store:
-        raise HTTPException(404, f"Unknown store: {store_id}")
-
+    """Upload a price list. The store comes from the session, not the query string."""
     try:
         df = parse_product_catalog(file.file)
     except Exception as e:
@@ -34,7 +33,9 @@ async def upload_catalog(
 
     existing = {
         p.sku: p
-        for p in session.exec(select(Product).where(Product.store_id == store.id)).all()
+        for p in session.exec(
+            select(Product).where(Product.store_id == current.id)
+        ).all()
     }
 
     new_count, updated = 0, 0
@@ -47,7 +48,7 @@ async def upload_catalog(
             updated += 1
         else:
             session.add(Product(
-                store_id=store.id, sku=r["sku"], name=r["name"],
+                store_id=current.id, sku=r["sku"], name=r["name"],
                 cost_price=r["cost_price"], sell_price=r["sell_price"],
             ))
             new_count += 1
@@ -57,9 +58,12 @@ async def upload_catalog(
 
 
 @router.get("", response_model=list[ProductOut])
-def list_products(store_id: str, session: Session = Depends(get_session)):
-    store = session.exec(select(Store).where(Store.code == store_id)).first()
-    if not store:
-        raise HTTPException(404, f"Unknown store: {store_id}")
-    items = session.exec(select(Product).where(Product.store_id == store.id)).all()
+def list_products(
+    current: Store = Depends(get_current_store),
+    session: Session = Depends(get_session),
+):
+    """Every product in the authenticated store's catalogue."""
+    items = session.exec(
+        select(Product).where(Product.store_id == current.id)
+    ).all()
     return [_to_out(p) for p in items]

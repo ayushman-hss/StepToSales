@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { DashboardData, Store } from './types';
+import type { DashboardData } from './types';
 
 /**
  * Named ranges a shopkeeper actually thinks in. "Last 7 days" and "last 4
@@ -37,36 +37,39 @@ export function rangeFor(preset: RangePreset): { startDate: string; endDate: str
   }
 }
 
+/**
+ * The shop is not part of this state: it is fixed by who is logged in (see
+ * auth.ts), and the server scopes every request to it.
+ */
 interface State {
   data: DashboardData | null;
-  stores: Store[];
   loading: boolean;
   error: string | null;
-  storeId: string;
   preset: RangePreset;
   startDate: string;
   endDate: string;
   setData: (d: DashboardData | null) => void;
-  setStores: (s: Store[]) => void;
   setLoading: (b: boolean) => void;
   setError: (e: string | null) => void;
   setPreset: (p: RangePreset) => void;
-  setFilters: (f: { storeId?: string; startDate?: string; endDate?: string }) => void;
+  setFilters: (f: { startDate?: string; endDate?: string }) => void;
+  /** Back to "today" with nothing loaded -- used when the login changes. */
+  reset: () => void;
 }
 
-const initial = rangeFor('today');
+function initialState() {
+  return {
+    data: null,
+    loading: false,
+    error: null,
+    preset: 'today' as RangePreset,
+    ...rangeFor('today'),
+  };
+}
 
 export const useDashboard = create<State>((set) => ({
-  data: null,
-  stores: [],
-  loading: false,
-  error: null,
-  storeId: 'all',
-  preset: 'today',
-  startDate: initial.startDate,
-  endDate: initial.endDate,
+  ...initialState(),
   setData: (data) => set({ data }),
-  setStores: (stores) => set({ stores }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
   setPreset: (preset) =>
@@ -77,10 +80,10 @@ export const useDashboard = create<State>((set) => ({
     ),
   setFilters: (f) =>
     set((s) => ({
-      storeId: f.storeId ?? s.storeId,
       startDate: f.startDate ?? s.startDate,
       endDate: f.endDate ?? s.endDate,
       // Typing a date is choosing a custom range.
       preset: f.startDate !== undefined || f.endDate !== undefined ? 'custom' : s.preset,
     })),
+  reset: () => set(initialState()),
 }));

@@ -1,6 +1,8 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
-import { BarChart3, Package, Tag, Users, Home } from 'lucide-react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { BarChart3, Package, Tag, Users, Home, LogOut } from 'lucide-react';
 import clsx from 'clsx';
+import { logout } from '../api';
+import { useAuth } from '../auth';
 import { Wordmark } from '../lib/ui/Wordmark';
 
 /** Short labels are for the bottom bar, where five tabs have to fit a phone. */
@@ -14,6 +16,48 @@ const NAV = [
 
 function isActive(pathname: string, to: string, exact?: boolean) {
   return exact ? pathname === to : pathname.startsWith(to);
+}
+
+/** Which shop this is, and the way out. Sits at the right of the header. */
+function Account() {
+  const me = useAuth((s) => s.me);
+  const status = useAuth((s) => s.status);
+  const navigate = useNavigate();
+
+  if (status === 'checking') return null;
+
+  if (!me) {
+    return (
+      <Link
+        to="/login"
+        className="inline-flex min-h-11 items-center rounded-control px-3 text-small font-semibold text-board hover:bg-board-tint md:min-h-9"
+      >
+        Log in
+      </Link>
+    );
+  }
+
+  const named = me.store_name && me.store_name !== me.store_code;
+  return (
+    <div className="flex min-w-0 items-center gap-1">
+      <span className="min-w-0 truncate text-small text-muted" title={me.store_name}>
+        <span className="font-semibold text-ink">{me.store_code}</span>
+        {/* The name only where the section links are not competing for room. */}
+        {named && <span className="hidden sm:inline md:hidden"> &middot; {me.store_name}</span>}
+      </span>
+      <button
+        type="button"
+        onClick={async () => {
+          await logout();
+          navigate('/login', { replace: true });
+        }}
+        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-control px-2 text-small font-medium text-muted transition-colors hover:bg-board-tint hover:text-board md:min-h-9 md:min-w-0 md:px-3"
+      >
+        <LogOut size={15} aria-hidden />
+        <span className="sr-only md:not-sr-only">Log out</span>
+      </button>
+    </div>
+  );
 }
 
 export function Layout() {
@@ -50,6 +94,10 @@ export function Layout() {
               );
             })}
           </nav>
+
+          <div className="ml-auto min-w-0">
+            <Account />
+          </div>
         </div>
       </header>
 

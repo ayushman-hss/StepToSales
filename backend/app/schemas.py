@@ -29,6 +29,8 @@ class UploadResponse(BaseModel):
     rows: int
     stores: List[str]
     date_range: List[str]
+    #: Rows in the file that belonged to other shops and were not loaded.
+    skipped_rows: int = 0
 
 class StoreOut(BaseModel):
     code: str

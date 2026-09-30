@@ -4,6 +4,7 @@ from sqlalchemy import delete as sa_delete
 import pandas as pd
 
 from ..db import get_session
+from ..dependencies import get_current_store
 from ..models import Store, Upload, SaleLine, Product, BundleSuggestion
 from ..schemas import BundleSuggestionOut, BundleActionIn
 from ..services.parser import parse_sales_lines
@@ -19,15 +20,12 @@ router = APIRouter(prefix="/api/bundles", tags=["bundles"])
 
 @router.post("/upload-lines")
 async def upload_sales_lines(
-    store_id: str,
     mode: str = Query("replace", pattern="^(replace|append)$"),
     file: UploadFile = File(...),
+    current: Store = Depends(get_current_store),
     session: Session = Depends(get_session),
 ):
-    store = session.exec(select(Store).where(Store.code == store_id)).first()
-    if not store:
-        raise HTTPException(404, f"Unknown store: {store_id}")
-
+    """Upload sale line items for the authenticated store."""
     try:
         df = parse_sales_lines(file.file)
     except Exception as e:
@@ -39,7 +37,7 @@ async def upload_sales_lines(
     removed = 0
     if mode == "replace":
         result = session.execute(
-            sa_delete(SaleLine).where(SaleLine.store_id == store.id)
+            sa_delete(SaleLine).where(SaleLine.store_id == current.id)
         )
         removed = result.rowcount or 0
 
@@ -49,7 +47,7 @@ async def upload_sales_lines(
 
     session.add_all([
         SaleLine(
-            store_id=store.id, upload_id=upload.id,
+            store_id=current.id, upload_id=upload.id,
             date=r["date"], hour=int(r["hour"]),
             transaction_id=r["transaction_id"], sku=r["sku"],
             qty=int(r["qty"]), unit_price=float(r["unit_price"]),
@@ -67,19 +65,16 @@ async def upload_sales_lines(
 
 @router.post("/generate")
 def generate(
-    store_id: str,
     margin_floor_pct: float = Query(0.15, ge=0.0, lt=1.0),
     min_support_tx: int | None = Query(None, ge=1),
     min_lift: float = Query(DEFAULT_MIN_LIFT, gt=0.0),
+    current: Store = Depends(get_current_store),
     session: Session = Depends(get_session),
 ):
-    store = session.exec(select(Store).where(Store.code == store_id)).first()
-    if not store:
-        raise HTTPException(404, f"Unknown store: {store_id}")
-
+    """Recompute bundle suggestions for the authenticated store."""
     rows = session.exec(
         select(SaleLine.upload_id, SaleLine.transaction_id, SaleLine.sku)
-        .where(SaleLine.store_id == store.id)
+        .where(SaleLine.store_id == current.id)
     ).all()
     if not rows:
         raise HTTPException(400, "No line-item data. Upload sales lines first.")
@@ -95,11 +90,11 @@ def generate(
     previous = {
         (s.sku_a, s.sku_b): (s.status, s.approved_price)
         for s in session.exec(
-            select(BundleSuggestion).where(BundleSuggestion.store_id == store.id)
+            select(BundleSuggestion).where(BundleSuggestion.store_id == current.id)
         ).all()
     }
     session.execute(
-        sa_delete(BundleSuggestion).where(BundleSuggestion.store_id == store.id)
+        sa_delete(BundleSuggestion).where(BundleSuggestion.store_id == current.id)
     )
     session.commit()
 
@@ -110,7 +105,7 @@ def generate(
     )
     stats: dict = {}
     suggestions = generate_suggestions(
-        session, store.id, df, margin_floor_pct,
+        session, current.id, df, margin_floor_pct,
         min_support_tx=effective_support, min_lift=min_lift, stats=stats,
     )
 
@@ -118,7 +113,7 @@ def generate(
     # say so instead of quietly returning a shorter list.
     catalog_skus = set(
         session.exec(
-            select(Product.sku).where(Product.store_id == store.id)
+            select(Product.sku).where(Product.store_id == current.id)
         ).all()
     )
     unmatched = sorted(set(df["sku"].astype(str)) - catalog_skus)
@@ -145,15 +140,14 @@ def generate(
 
 @router.get("", response_model=list[BundleSuggestionOut])
 def list_bundles(
-    store_id: str,
     status: str = Query("all"),
+    current: Store = Depends(get_current_store),
     session: Session = Depends(get_session),
 ):
-    store = session.exec(select(Store).where(Store.code == store_id)).first()
-    if not store:
-        raise HTTPException(404, f"Unknown store: {store_id}")
-
-    stmt = select(BundleSuggestion).where(BundleSuggestion.store_id == store.id)
+    """Bundle suggestions for the authenticated store."""
+    stmt = select(BundleSuggestion).where(
+        BundleSuggestion.store_id == current.id
+    )
     if status != "all":
         stmt = stmt.where(BundleSuggestion.status == status)
     suggestions = session.exec(stmt.order_by(BundleSuggestion.lift.desc())).all()
@@ -161,7 +155,9 @@ def list_bundles(
     skus = {s.sku_a for s in suggestions} | {s.sku_b for s in suggestions}
     products = {
         p.sku: p for p in session.exec(
-            select(Product).where(Product.store_id == store.id).where(Product.sku.in_(skus))
+            select(Product)
+            .where(Product.store_id == current.id)
+            .where(Product.sku.in_(skus))
         ).all()
     } if skus else {}
 
@@ -188,15 +184,29 @@ def list_bundles(
     return out
 
 
+def _owned_suggestion(
+    suggestion_id: int, current: Store, session: Session
+) -> BundleSuggestion:
+    """Load a suggestion and confirm it belongs to the authenticated store.
+
+    Without this check, S1 could approve or reject S2's bundles by guessing
+    an integer id. The 404 (not 403) is deliberate: don't confirm the row
+    exists to someone who has no business seeing it.
+    """
+    s = session.get(BundleSuggestion, suggestion_id)
+    if not s or s.store_id != current.id:
+        raise HTTPException(404, "Suggestion not found")
+    return s
+
+
 @router.post("/{suggestion_id}/approve")
 def approve(
     suggestion_id: int,
     action: BundleActionIn,
+    current: Store = Depends(get_current_store),
     session: Session = Depends(get_session),
 ):
-    s = session.get(BundleSuggestion, suggestion_id)
-    if not s:
-        raise HTTPException(404, "Suggestion not found")
+    s = _owned_suggestion(suggestion_id, current, session)
     s.status = "approved"
     s.approved_price = action.price if action.price is not None else s.suggested_price
     session.commit()
@@ -204,10 +214,12 @@ def approve(
 
 
 @router.post("/{suggestion_id}/reject")
-def reject(suggestion_id: int, session: Session = Depends(get_session)):
-    s = session.get(BundleSuggestion, suggestion_id)
-    if not s:
-        raise HTTPException(404, "Suggestion not found")
+def reject(
+    suggestion_id: int,
+    current: Store = Depends(get_current_store),
+    session: Session = Depends(get_session),
+):
+    s = _owned_suggestion(suggestion_id, current, session)
     s.status = "rejected"
     session.commit()
     return {"ok": True}

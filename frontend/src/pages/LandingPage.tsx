@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import { BarChart3, Package, Tag, Users } from 'lucide-react';
 import { ThresholdBar } from '../lib/ui/ThresholdBar';
+import { Button } from '../lib/ui/controls';
+import { useAuth } from '../auth';
 
 /**
  * The old landing showed two of the four features and used gradient-washed
@@ -36,6 +38,8 @@ const SECTIONS = [
 ];
 
 export function LandingPage() {
+  const me = useAuth((s) => s.me);
+
   return (
     <div className="py-4 md:py-8">
       <section className="max-w-xl">
@@ -56,6 +60,14 @@ export function LandingPage() {
             thresholdLabel="the line"
             caption="You are over it, or you are not. That is the whole idea."
           />
+        </div>
+
+        <div className="mt-8">
+          {me ? (
+            <Button to="/dashboard">Open {me.store_code}&rsquo;s numbers</Button>
+          ) : (
+            <Button to="/login">Log in to your shop</Button>
+          )}
         </div>
       </section>
 

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from ..db import get_session
+from ..dependencies import get_current_store, own_store_code
 from ..models import Product, Store
 from ..models_pooling import BuyingPool, PoolEvent, PoolOrder, PoolProduct
 from ..schemas_pooling import (
@@ -31,7 +32,13 @@ from ..services.pooling.repository import (
     store_ids_by_code,
 )
 
-router = APIRouter(prefix="/api/pools", tags=["pools"])
+# Every member shop can see the whole pool -- that is the point of it -- but
+# each one can only order or withdraw for itself.
+router = APIRouter(
+    prefix="/api/pools",
+    tags=["pools"],
+    dependencies=[Depends(get_current_store)],
+)
 
 
 def _strategy(value: str) -> Strategy:
@@ -164,16 +171,15 @@ def place_order(
     body: PlaceOrderIn,
     strategy: str = Query("pro_rata"),
     session: Session = Depends(get_session),
+    store: Store = Depends(get_current_store),
 ):
+    store_code = own_store_code(body.store_id, store)
     domain, row = _load(session, code)
-    store = session.exec(select(Store).where(Store.code == body.store_id)).first()
-    if not store:
-        raise HTTPException(404, f"Unknown store: {body.store_id}")
 
     # Validate against the domain first so a rejected order never reaches the
     # database and the error text matches the rules the settlement enforces.
     try:
-        domain.place_order(body.store_id, body.sku, body.qty)
+        domain.place_order(store_code, body.sku, body.qty)
     except PoolError as exc:
         raise HTTPException(409, str(exc))
 
@@ -193,7 +199,7 @@ def place_order(
             )
         )
     record_event(
-        session, row.id, actor=body.store_id, kind="ordered",
+        session, row.id, actor=store_code, kind="ordered",
         sku=body.sku, qty=body.qty,
     )
     session.commit()
@@ -206,13 +212,12 @@ def withdraw(
     body: WithdrawIn,
     strategy: str = Query("pro_rata"),
     session: Session = Depends(get_session),
+    store: Store = Depends(get_current_store),
 ):
+    store_code = own_store_code(body.store_id, store)
     domain, row = _load(session, code)
-    store = session.exec(select(Store).where(Store.code == body.store_id)).first()
-    if not store:
-        raise HTTPException(404, f"Unknown store: {body.store_id}")
     try:
-        domain.withdraw(body.store_id, body.sku)
+        domain.withdraw(store_code, body.sku)
     except PoolError as exc:
         raise HTTPException(409, str(exc))
 
@@ -226,7 +231,7 @@ def withdraw(
     for order in session.exec(stmt).all():
         session.delete(order)
     record_event(
-        session, row.id, actor=body.store_id, kind="withdrew", sku=body.sku,
+        session, row.id, actor=store_code, kind="withdrew", sku=body.sku,
     )
     session.commit()
     return _render(session, code, _strategy(strategy))
