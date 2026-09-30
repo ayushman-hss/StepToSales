@@ -72,13 +72,14 @@ class PoolSummaryOut(BaseModel):
 
 
 class PlaceOrderIn(BaseModel):
-    store_id: str
+    #: Defaults to the logged-in shop; naming any other shop is refused.
+    store_id: Optional[str] = None
     sku: str
     qty: int
 
 
 class WithdrawIn(BaseModel):
-    store_id: str
+    store_id: Optional[str] = None
     sku: Optional[str] = None
 
 

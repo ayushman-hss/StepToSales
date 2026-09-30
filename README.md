@@ -600,16 +600,19 @@ StepToSale/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              FastAPI application
-│   │   ├── models.py            Retail SQLModel tables
+│   │   ├── dependencies.py      Login check shared by every shop route
+│   │   ├── models.py            Retail and login SQLModel tables
 │   │   ├── models_pooling.py    Group-buying SQLModel tables
 │   │   │
 │   │   ├── routers/
+│   │   │   ├── auth.py          Login, logout and "who am I"
 │   │   │   ├── dashboard.py     Dashboard API routes
 │   │   │   ├── bundles.py       Bundle API routes
 │   │   │   ├── products.py      Product API routes
 │   │   │   └── pools.py         Group-buying API routes
 │   │   │
 │   │   └── services/
+│   │       ├── auth.py          Password hashing and sessions
 │   │       ├── metrics.py       Hourly/daily/heatmap aggregates
 │   │       ├── insights.py      Rule-based business observations
 │   │       ├── associations.py  Market-basket analysis
@@ -621,6 +624,7 @@ StepToSale/
 │   ├── scripts/
 │   │   ├── generate_bundle_sample.py
 │   │   ├── generate_sample.py
+│   │   ├── create_user.py       Add a shop login or reset its password
 │   │   └── reset_demo.py
 │   │
 │   └── tests/                   Backend tests
@@ -632,7 +636,8 @@ StepToSale/
 │       ├── lib/
 │       │   ├── ui/              Design system
 │       │   └── charts/          ECharts configuration
-│       ├── api.ts               Typed API client
+│       ├── api.ts               Typed API client (adds the login token)
+│       ├── auth.ts              Who is logged in
 │       └── store.ts             Dashboard filter state
 │
 ├── docs/
@@ -766,6 +771,39 @@ Open:
 ```text
 http://localhost:5173
 ```
+
+---
+
+## 6. Log in
+
+Every page with a shop's numbers needs a login, and each login belongs to one
+shop: it sees that shop's dashboard, products and bundles and nobody else's.
+The group-buying pool is shared, but a shop can only order or withdraw for
+itself.
+
+`reset_demo.py` creates one login per shop:
+
+| Username | Shop | Password |
+|---|---|---|
+| `s1` | S1, residential kirana | `s1shop` |
+| `s2` | S2, station kiosk | `s2shop` |
+| `s3` | S3, pool-only shop (no sales data) | `s3shop` |
+
+Usernames are not case-sensitive, so `S1` works too. Re-running
+`reset_demo.py` resets these and logs everyone out.
+
+To add a real login (8+ character password), or reset a password (which also
+signs that login out):
+
+```bash
+cd backend
+python scripts/create_user.py S1 ramesh
+```
+
+Sessions last 7 days. The browser keeps a random token; the database keeps
+only its SHA-256 and a PBKDF2 hash of the password. In `/docs`, use
+**Authorize** with a token from `POST /api/auth/login` to try the protected
+routes.
 
 ---
 

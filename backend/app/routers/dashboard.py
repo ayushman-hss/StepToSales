@@ -5,7 +5,7 @@ import pandas as pd
 
 from ..db import get_session
 from ..dependencies import get_current_store
-from ..models import Store, Upload, HourlyData, StoreUser
+from ..models import Store, Upload, HourlyData
 from datetime import date, timedelta
 from sqlalchemy import func
 
@@ -57,29 +57,26 @@ router = APIRouter(prefix="/api", tags=["dashboard"])
 async def upload(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
-    user: StoreUser = Depends(get_current_store),
+    store: Store = Depends(get_current_store),
 ):
     if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(400, "Only .xlsx or .xls files are accepted")
 
     try:
-        df = parse_excel(file.file)
+        # A file without a store_id column is taken to be this shop's.
+        df = parse_excel(file.file, default_store=store.code)
     except Exception as e:
         raise HTTPException(400, f"Parse error: {e}")
 
     if df.empty:
         raise HTTPException(400, "No valid rows found")
 
-    if not user.store_id:
-        raise HTTPException(403, "User is not linked to a store")
-
-    # A store user can only upload for their own store.
-    df = df[df["store_id"] == user.store.code]
+    # A store user can only upload for their own store. Rows for other shops
+    # in a combined file are skipped, and the response says how many.
+    total = len(df)
+    df = df[df["store_id"] == store.code]
     if df.empty:
         raise HTTPException(400, "File contains no rows for your store")
-
-    # 1. Store already exists (it's this user's store), no upsert needed.
-    store = user.store
 
     # 2. Register upload
     upload = Upload(filename=file.filename, rows=len(df))
@@ -107,6 +104,7 @@ async def upload(
         rows=len(records),
         stores=[store.code],
         date_range=[df["date"].min(), df["date"].max()],
+        skipped_rows=total - len(df),
     )
 
 
@@ -146,9 +144,9 @@ def get_dashboard(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     session: Session = Depends(get_session),
-    user: StoreUser = Depends(get_current_store),
+    store: Store = Depends(get_current_store),
 ):
-    store_code = user.store.code
+    store_code = store.code
     df = _load_df(session, store_code, start_date, end_date)
     if df.empty:
         raise HTTPException(404, "No data for the given filters")
@@ -237,11 +235,8 @@ def _compare(
 
 
 @router.get("/stores", response_model=list[StoreOut])
-def list_stores(
-    session: Session = Depends(get_session),
-    user: StoreUser = Depends(get_current_store),
-):
-    return [StoreOut(code=user.store.code, name=user.store.name)]
+def list_stores(store: Store = Depends(get_current_store)):
+    return [StoreOut(code=store.code, name=store.name)]
 
 
 @router.get("/health")

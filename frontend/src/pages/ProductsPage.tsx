@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { uploadProductCatalog, fetchProducts } from '../api';
+import { useCurrentStore } from '../auth';
 import type { Product } from '../types';
 import { ProductTable } from '../components/ProductTable';
 import { FeatureSwitcher } from '../components/FeatureSwitcher';
@@ -8,7 +9,6 @@ import {
   EmptyState,
   Notice,
   PageHeader,
-  Segmented,
   UploadButton,
 } from '../lib/ui/controls';
 
@@ -16,7 +16,7 @@ const FLOOR = 10; // the margin floor the bundle pricer defaults to
 
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [storeId, setStoreId] = useState('S1');
+  const storeId = useCurrentStore().store_code;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,17 +63,6 @@ export function ProductsPage() {
       />
 
       <div className="space-y-6">
-        <Segmented
-          label="Shop"
-          value={storeId}
-          onChange={setStoreId}
-          options={[
-            { value: 'S1', label: 'S1' },
-            { value: 'S2', label: 'S2' },
-          ]}
-          size="sm"
-        />
-
         {error && <Notice>{error}</Notice>}
         {loading && !products.length && (
           <p className="text-small text-muted">Loading&hellip;</p>

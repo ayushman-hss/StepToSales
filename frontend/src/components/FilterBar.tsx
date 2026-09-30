@@ -1,5 +1,6 @@
 import { useDashboard, type RangePreset } from '../store';
-import { Select, Input, Segmented } from '../lib/ui/controls';
+import { useCurrentStore } from '../auth';
+import { Input, Segmented } from '../lib/ui/controls';
 
 const PERIODS: { value: RangePreset; label: string }[] = [
   { value: 'today', label: 'Today' },
@@ -11,44 +12,23 @@ const PERIODS: { value: RangePreset; label: string }[] = [
 ];
 
 export function FilterBar() {
-  const { stores, storeId, preset, startDate, endDate, setFilters, setPreset } =
-    useDashboard();
-
-  // Two or three shops is a segmented control, not a dropdown: fewer taps and
-  // no hidden state. Past that it has to collapse into a select.
-  const asSegments = stores.length > 0 && stores.length <= 3;
+  const { preset, startDate, endDate, setFilters, setPreset } = useDashboard();
+  const me = useCurrentStore();
 
   return (
     <div className="space-y-4 rounded-section border border-rule bg-white p-4 md:p-5">
       <div className="flex flex-wrap items-end gap-4">
-        {asSegments ? (
-          <Segmented
-            label="Shop"
-            value={storeId}
-            onChange={(v) => setFilters({ storeId: v })}
-            options={[
-              { value: 'all', label: 'All' },
-              // Codes, not names: a segment has to stay narrow, and the rest
-              // of the app refers to shops as S1/S2/S3 anyway.
-              ...stores.map((s) => ({ value: s.code, label: s.code })),
-            ]}
-            size="sm"
-          />
-        ) : (
-          <Select
-            label="Shop"
-            value={storeId}
-            onChange={(e) => setFilters({ storeId: e.target.value })}
-            className="min-w-40"
-          >
-            <option value="all">All shops</option>
-            {stores.map((s) => (
-              <option key={s.code} value={s.code}>
-                {s.name || s.code}
-              </option>
-            ))}
-          </Select>
-        )}
+        {/* Not a picker any more: a login sees exactly one shop. Still shown,
+            so it is never ambiguous whose numbers these are. */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-small font-medium text-muted">Shop</span>
+          <span className="inline-flex min-h-11 items-center gap-2 rounded-control border border-rule bg-chalk px-3.5 text-body md:min-h-10">
+            <span className="font-semibold text-ink">{me.store_code}</span>
+            {me.store_name !== me.store_code && (
+              <span className="text-muted">{me.store_name}</span>
+            )}
+          </span>
+        </div>
 
         <Segmented
           label="Period"

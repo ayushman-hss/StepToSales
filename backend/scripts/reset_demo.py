@@ -41,8 +41,9 @@ from app.services.bundles import generate_suggestions
 
 from app.models import (
     Store, Upload, HourlyData, SaleLine, Product, BundleSuggestion, StoreUser,
+    AuthSession,
 )
-from app.services.auth import hash_password
+from app.services.auth import hash_password, normalise_username
 
 import generate_bundle_sample
 import generate_sample
@@ -54,6 +55,9 @@ DEMO_CREDENTIALS = {
     "S2": "s2shop",
     "S3": "s3shop",
 }
+#: Shown next to the code once a shop logs in. Matches the profiles in
+#: generate_bundle_sample.py.
+STORE_NAMES = {"S1": "Residential kirana", "S2": "Station kiosk"}
 
 BASE = Path(__file__).resolve().parents[1]
 STORES = ["S1", "S2"]
@@ -266,15 +270,21 @@ def load_users(session: Session) -> None:
     that appears in POOL_ONLY_STORES (S3) still gets a login so you can sign
     in as it to see the pool from its side.
     """
+    # Sessions point at users, so they go first. Everyone is logged out.
+    session.execute(sa_delete(AuthSession))
     session.execute(sa_delete(StoreUser))
     session.commit()
 
     created = []
     for code, password in DEMO_CREDENTIALS.items():
         store = get_store(session, code)
+        if code in STORE_NAMES and store.name in ("", code):
+            store.name = STORE_NAMES[code]
+            session.add(store)
+        # Stored lower-case; logging in as "S1" or "s1" both work.
         session.add(StoreUser(
             store_id=store.id,
-            username=code,
+            username=normalise_username(code),
             password_hash=hash_password(password),
         ))
         created.append(f"{code}/{password}")

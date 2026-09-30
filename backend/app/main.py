@@ -3,7 +3,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import init_db
-from .routers import dashboard, products, bundles, pools
 from .routers import auth, dashboard, products, bundles, pools
 
 @asynccontextmanager
@@ -29,7 +28,6 @@ def root():
     return {"status": "ok", "docs": "/docs"}
 
 app.include_router(auth.router)
-app.include_router(dashboard.router)
 app.include_router(dashboard.router)
 app.include_router(products.router)
 app.include_router(bundles.router)

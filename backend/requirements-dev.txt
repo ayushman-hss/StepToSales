@@ -3,3 +3,4 @@
 pytest>=8
 pytest-cov
 hypothesis>=6
+httpx  # FastAPI's TestClient, for the API tests

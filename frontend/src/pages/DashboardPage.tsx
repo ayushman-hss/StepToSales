@@ -1,6 +1,6 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDashboard } from '../store';
-import { fetchDashboard, fetchStores, uploadExcel } from '../api';
+import { fetchDashboard, uploadExcel } from '../api';
 import { KpiCards } from '../components/KpiCards';
 import { InsightCards } from '../components/InsightCards';
 import { WhatsAppPreview } from '../components/WhatsAppPreview';
@@ -39,34 +39,37 @@ const avgDay = (days: number) => (days > 1 ? ', on an average day' : '');
 
 export function DashboardPage() {
   const {
-    data, loading, error, storeId, startDate, endDate, preset,
-    setData, setStores, setLoading, setError, setPreset,
+    data, loading, error, startDate, endDate, preset,
+    setData, setLoading, setError, setPreset,
   } = useDashboard();
+  const [note, setNote] = useState<string | null>(null);
 
+  // Only the newest request may write to the page. Tapping "Last 4 weeks"
+  // while today's numbers are still loading must not let the slower,
+  // older reply land last and show today under the wrong period.
+  const latest = useRef(0);
+
+  // No shop in the request: the server answers for the logged-in one.
   const load = useCallback(async () => {
+    const id = ++latest.current;
     try {
       setLoading(true);
       setError(null);
-      const [d, s] = await Promise.all([
-        fetchDashboard({
-          store_id: storeId,
-          start_date: startDate || undefined,
-          end_date: endDate || undefined,
-        }),
-        fetchStores(),
-      ]);
-      setData(d);
-      setStores(s);
+      const d = await fetchDashboard({
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+      });
+      if (id === latest.current) setData(d);
     } catch (e) {
+      if (id !== latest.current) return;
       const msg = e instanceof Error ? e.message : 'Unknown error';
       // An empty period is not an error -- nothing has been sold yet.
       setError(msg === NO_DATA ? null : msg);
       setData(null);
-      setStores(await fetchStores().catch(() => []));
     } finally {
-      setLoading(false);
+      if (id === latest.current) setLoading(false);
     }
-  }, [storeId, startDate, endDate, setData, setStores, setLoading, setError]);
+  }, [startDate, endDate, setData, setLoading, setError]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -76,7 +79,14 @@ export function DashboardPage() {
     try {
       setLoading(true);
       setError(null);
-      await uploadExcel(file);
+      setNote(null);
+      const result = await uploadExcel(file);
+      if (result.skipped_rows) {
+        setNote(
+          `Loaded ${result.rows} hours for your shop. ${result.skipped_rows} rows ` +
+            'in the file were for other shops and were left out.',
+        );
+      }
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
@@ -99,6 +109,7 @@ export function DashboardPage() {
 
         {loading && !data && <p className="text-small text-muted">Loading&hellip;</p>}
         {error && <Notice>{error}</Notice>}
+        {note && <Notice tone="brass">{note}</Notice>}
 
         {!data && !loading && !error && (
           <EmptyState

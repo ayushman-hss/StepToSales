@@ -5,7 +5,7 @@ REQUIRED = {"date", "hour", "footfall", "transactions", "sales"}
 REQUIRED_LINES = {"date", "hour", "transaction_id", "sku", "qty", "unit_price"}
 REQUIRED_PRODUCTS = {"sku", "name", "cost_price", "sell_price"}
 
-def parse_excel(file: BinaryIO) -> pd.DataFrame:
+def parse_excel(file: BinaryIO, default_store: str = "S1") -> pd.DataFrame:
     df = pd.read_excel(file)
     df.columns = [str(c).strip().lower() for c in df.columns]
 
@@ -20,7 +20,7 @@ def parse_excel(file: BinaryIO) -> pd.DataFrame:
     df["sales"] = df["sales"].astype(float)
 
     if "store_id" not in df.columns:
-        df["store_id"] = "S1"
+        df["store_id"] = default_store
     else:
         df["store_id"] = df["store_id"].astype(str)
 

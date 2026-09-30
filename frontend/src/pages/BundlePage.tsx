@@ -7,6 +7,7 @@ import {
   rejectBundle,
 } from '../api';
 import type { GenerateResult } from '../api';
+import { useCurrentStore } from '../auth';
 import type { BundleSuggestion } from '../types';
 import { BundleCard } from '../components/BundleCard';
 import { FeatureSwitcher } from '../components/FeatureSwitcher';
@@ -23,7 +24,7 @@ import {
 type StatusFilter = 'pending' | 'approved' | 'rejected' | 'all';
 
 export function BundlesPage() {
-  const [storeId, setStoreId] = useState('S1');
+  const storeId = useCurrentStore().store_code;
   // S2's catalogue tops out near 13.8% product margin, so a 15% floor makes
   // every bundle there impossible. 10% leaves both shops room to discount.
   const [marginFloor, setMarginFloor] = useState(0.1);
@@ -97,16 +98,6 @@ export function BundlesPage() {
 
       <div className="space-y-6">
         <div className="flex flex-wrap items-end gap-4 rounded-section border border-rule bg-white p-4 md:p-5">
-          <Segmented
-            label="Shop"
-            value={storeId}
-            onChange={setStoreId}
-            options={[
-              { value: 'S1', label: 'S1' },
-              { value: 'S2', label: 'S2' },
-            ]}
-            size="sm"
-          />
           <Input
             label="Keep at least"
             type="number"

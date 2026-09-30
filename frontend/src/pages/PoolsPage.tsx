@@ -11,6 +11,7 @@ import {
 } from '../api';
 import type { PoolDetail, PoolEvent, PoolProduct, PoolStrategy } from '../types';
 import { formatPaise } from '../lib/money';
+import { useCurrentStore } from '../auth';
 import { ThresholdBar } from '../lib/ui/ThresholdBar';
 import {
   Badge,
@@ -89,7 +90,8 @@ export function PoolsPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [store, setStore] = useState('S1');
+  // Orders are always placed as the logged-in shop; the server refuses any other.
+  const store = useCurrentStore().store_code;
   const [sku, setSku] = useState('');
   const [qty, setQty] = useState(10);
 
@@ -195,7 +197,14 @@ export function PoolsPage() {
               <tbody>
                 {pool.stores.map((s) => (
                   <tr key={s.store} className="border-b border-rule last:border-0">
-                    <td className="py-2.5 font-medium">{s.store}</td>
+                    <td className="py-2.5 font-medium">
+                      {s.store}
+                      {s.store === store && (
+                        <span className="ml-2 align-middle">
+                          <Badge tone="board">You</Badge>
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2.5 text-right text-muted">
                       {formatPaise(s.cost_alone, { compact: true })}
                     </td>
@@ -231,18 +240,11 @@ export function PoolsPage() {
 
           {/* --- place an order --------------------------------------- */}
           <Section title="Add to this order">
+            <p className="mb-3 text-small text-muted">
+              Ordering as <strong className="font-semibold text-ink">{store}</strong>.
+              Other shops add their own orders when they log in.
+            </p>
             <div className="flex flex-wrap items-end gap-3">
-              <Segmented
-                label="Shop"
-                value={store}
-                onChange={setStore}
-                options={[
-                  { value: 'S1', label: 'S1' },
-                  { value: 'S2', label: 'S2' },
-                  { value: 'S3', label: 'S3' },
-                ]}
-                size="sm"
-              />
               <Select
                 label="Product"
                 value={sku}

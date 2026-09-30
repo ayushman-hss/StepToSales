@@ -1,6 +1,12 @@
 from sqlmodel import SQLModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
+
+
+def utc_now() -> datetime:
+    """Naive UTC, to match the TIMESTAMP WITHOUT TIME ZONE columns."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 
 class Store(SQLModel, table=True):
     __tablename__ = "store"
@@ -9,19 +15,28 @@ class Store(SQLModel, table=True):
     name: str = ""
 
 class StoreUser(SQLModel, table=True):
+    """A login. Each one belongs to exactly one shop and sees only that shop."""
     __tablename__ = "store_user"
     id: Optional[int] = Field(default=None, primary_key=True)
     store_id: int = Field(foreign_key="store.id", index=True)
-    username: str = Field(index=True, unique=True)
+    username: str = Field(index=True, unique=True)   # stored lower-cased
     password_hash: str
+    created_at: datetime = Field(default_factory=utc_now)
 
 
-class Session(SQLModel, table=True):
-    __tablename__ = "session"
-    token: str = Field(primary_key=True)
+class AuthSession(SQLModel, table=True):
+    """A signed-in browser.
+
+    Only a SHA-256 of the bearer token is kept, so a copy of this table is not
+    a set of working logins. Named AuthSession so it never gets confused with
+    sqlmodel's database Session.
+    """
+    __tablename__ = "auth_session"
+    token_hash: str = Field(primary_key=True)
     store_id: int = Field(foreign_key="store.id", index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    expires_at: datetime
+    user_id: int = Field(foreign_key="store_user.id", index=True)
+    created_at: datetime = Field(default_factory=utc_now)
+    expires_at: datetime = Field(index=True)
 
 class Upload(SQLModel, table=True):
     __tablename__ = "upload"
