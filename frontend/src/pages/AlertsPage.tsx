@@ -66,7 +66,7 @@ export function AlertsPage() {
       fetchAlerts()
         .then((d) => alive && setData(d))
         .catch((e) => alive && setError(e instanceof Error ? e.message : 'Could not load alerts'));
-    tick();
+    void tick();
     const id = window.setInterval(tick, REFRESH_MS);
     return () => {
       alive = false;

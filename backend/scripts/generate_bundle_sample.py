@@ -205,7 +205,7 @@ def signature_pairs(code: str, rules, weights: dict) -> list[tuple[str, str]]:
     attempts = 0
     while len(pairs) < SIGNATURE_PAIRS and attempts < 200:
         attempts += 1
-        a_pool, b_pool, _ = rng.choice(candidates)
+        a_pool, b_pool, _ = rng.choice(candidates)  # NOSONAR -- seeded simulation
         # Habits form around everyday goods, not the priciest shelf item.
         a, b = choose(a_pool, weights, rng), choose(b_pool, weights, rng)
         pair = tuple(sorted((a, b)))
@@ -224,7 +224,7 @@ def pick_hour(profile) -> int:
     """Trade happens all day; peaks are weighted, not exclusive."""
     hours = profile["open_hours"]
     weights = [3.2 if h in profile["peak_hours"] else 1.0 for h in hours]
-    return random.choices(hours, weights=weights, k=1)[0]
+    return random.choices(hours, weights=weights, k=1)[0]  # NOSONAR -- seeded simulation
 
 
 def month_factor(day_of_month: int, profile) -> float:
@@ -245,9 +245,9 @@ def quantity(category: str, day_of_month: int, profile) -> int:
     if category not in STAPLES:
         return 1
     if profile["salary_effect"] and day_of_month <= 7:
-        r = random.random()
+        r = random.random()  # NOSONAR -- seeded simulation
         return 3 if r < 0.10 else 2 if r < 0.55 else 1
-    return 2 if random.random() < (0.15 if profile["salary_effect"] else 0.05) else 1
+    return 2 if random.random() < (0.15 if profile["salary_effect"] else 0.05) else 1  # NOSONAR -- seeded simulation
 
 
 def generate_store(code: str, profile, now: datetime) -> pd.DataFrame:
@@ -282,17 +282,17 @@ def generate_store(code: str, profile, now: datetime) -> pd.DataFrame:
             # Today stops at the present moment: nothing from later hours,
             # and only the elapsed share of the hour we are in.
             if day == today and (
-                hour > now.hour or (hour == now.hour and random.random() > elapsed)
+                hour > now.hour or (hour == now.hour and random.random() > elapsed)  # NOSONAR -- seeded simulation
             ):
                 continue
 
-            size = random.choices(sizes, weights=size_weights, k=1)[0]
+            size = random.choices(sizes, weights=size_weights, k=1)[0]  # NOSONAR -- seeded simulation
             if size == 1:
                 basket = [pick_single(profile["category_mix"], pools, weights)]
             else:
                 # A multi-item bill is built around one plausible pairing,
                 # then topped up with other things the household needed.
-                if signatures and random.random() < SIGNATURE_SHARE:
+                if signatures and random.random() < SIGNATURE_SHARE:  # NOSONAR -- seeded simulation
                     basket = list(pick_signature(signatures))
                 else:
                     basket = list(pick_pair(rules, weights))

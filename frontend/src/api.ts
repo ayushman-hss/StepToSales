@@ -292,9 +292,11 @@ export async function resetLiveDay(): Promise<LiveStatus> {
 
 /** One id per bill, made on the phone, so a retried tap is counted once. */
 export function newEventId(): string {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  // randomUUID needs https; a phone on the shop's Wi-Fi over plain http
+  // still has getRandomValues, so the id is never guessable either way.
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 export interface TillReceipt {

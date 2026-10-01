@@ -22,7 +22,8 @@ import {
 
 const paise = (rupees: number) => Math.round(rupees * 100);
 /** "Butter - Pasteurised" is supplier data, not a label to echo. */
-const clean = (name: string) => name.replace(/\s+-\s+/g, ', ');
+const clean = (name: string) =>
+  name.split(/\s-\s/).map((part) => part.trim()).join(', ');
 
 /**
  * A phone till for the logged-in shop. Every bill lands on the live
@@ -55,7 +56,7 @@ export function TillPage() {
       fetchRecentBills(8)
         .then((b) => alive && setRecent(b))
         .catch(() => undefined);
-    tick();
+    void tick();
     const id = window.setInterval(tick, 4000);
     return () => {
       alive = false;

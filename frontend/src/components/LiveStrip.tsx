@@ -58,7 +58,7 @@ export function LiveStrip() {
       fetchLiveStatus()
         .then((s) => alive && setStatus(s))
         .catch(() => alive && setStatus(null));
-    tick();
+    void tick();
     const id = window.setInterval(tick, 2000);
     return () => {
       alive = false;

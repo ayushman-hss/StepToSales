@@ -46,7 +46,7 @@ export function BundlesPage() {
     }
   };
 
-  useEffect(() => { load(); }, [storeId, status]);
+  useEffect(() => { void load(); }, [storeId, status]);
 
   const onUploadLines = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

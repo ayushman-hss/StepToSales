@@ -61,7 +61,8 @@ const STATUS: Record<string, { tone: 'board' | 'brass' | 'neutral' | 'clay'; lab
 };
 
 /** "Butter - Pasteurised" is supplier data, not a label we should echo. */
-const clean = (name: string) => name.replace(/\s+-\s+/g, ', ');
+const clean = (name: string) =>
+  name.split(/\s-\s/).map((part) => part.trim()).join(', ');
 
 function TierLadder({ product }: { product: PoolProduct }) {
   return (

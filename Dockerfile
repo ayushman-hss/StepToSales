@@ -11,7 +11,9 @@
 FROM node:22-slim AS web
 WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm install --no-audit --no-fund
+# Exactly the versions in the lockfile, and no package's install scripts:
+# the build needs none (Vite and Tailwind ship prebuilt native binaries).
+RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 
@@ -22,9 +24,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     STATIC_DIR=/app/frontend/dist
 WORKDIR /app/backend
-COPY backend/requirements.txt ./
-RUN pip install -r requirements.txt
-COPY backend/ ./
+# requirements.lock pins every package, dependencies included, with hashes;
+# wheels only, so no package runs setup code while installing.
+COPY backend/requirements.lock ./
+RUN pip install --require-hashes --only-binary :all: -r requirements.lock
+# Run as an ordinary user. It owns backend/ because the first boot writes the
+# generated demo spreadsheets there.
+RUN useradd --create-home --uid 10001 app && chown app:app /app/backend
+COPY --chown=app:app backend/ ./
 COPY --from=web /web/dist /app/frontend/dist
+USER app
 EXPOSE 8000
 CMD ["sh", "scripts/start.sh"]

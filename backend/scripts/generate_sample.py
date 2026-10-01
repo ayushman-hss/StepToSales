@@ -82,7 +82,7 @@ def build(store: str, now: datetime) -> list[dict]:
                 )
                 footfall = max(transactions, round(transactions / random.uniform(lo, hi)))
             else:
-                footfall = random.randint(*profile["idle_footfall"])
+                footfall = random.randint(*profile["idle_footfall"])  # NOSONAR -- seeded simulation
                 if day == today and hour == now.hour:
                     footfall = round(footfall * elapsed)
 

@@ -68,7 +68,7 @@ export function AskBox() {
         className="mt-4 flex gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          ask(text);
+          void ask(text);
         }}
       >
         <input

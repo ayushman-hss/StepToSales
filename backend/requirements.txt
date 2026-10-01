@@ -1,3 +1,11 @@
+# What the app needs. Docker and CI install requirements.lock instead: every
+# package, dependencies included, pinned with hashes. After changing this file
+# (or requirements-dev.txt), regenerate both locks from backend/:
+#
+#   uv pip compile requirements.txt --universal --python-version 3.12 --generate-hashes --no-header -o requirements.lock
+#   uv pip compile requirements.txt requirements-dev.txt -c requirements.lock --universal --python-version 3.12 --generate-hashes --no-header -o requirements-dev.lock
+#
+# tests/test_config.py fails if a lock falls behind this file.
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 pandas==2.2.3

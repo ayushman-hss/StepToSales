@@ -16,7 +16,7 @@ export default function App() {
   // A token saved from an earlier visit is only trusted once the server
   // confirms it; until then protected pages show "checking".
   useEffect(() => {
-    restoreSession();
+    void restoreSession();
   }, []);
 
   return (

@@ -343,7 +343,7 @@ def _clip(s: str, n: int = 40) -> str:
 def build_catalogue(products) -> list[CatalogueItem]:
     """Supplier names are descriptions ("Butter - Pasteurised"); keep the
     part a shopkeeper would say, and make it unique within the shop."""
-    parts_of = {p.sku: [x.strip() for x in re.split(r"\s+-\s+|,", p.name) if x.strip()]
+    parts_of = {p.sku: [x.strip() for x in re.split(r"\s-\s|,", p.name) if x.strip()]
                 for p in products}
 
     def head(parts: list[str], depth: int) -> str:
@@ -368,7 +368,7 @@ def build_catalogue(products) -> list[CatalogueItem]:
 
 def _match_text(item: CatalogueItem) -> str:
     """The words that name the product: the short name, unclipped."""
-    parts = [x.strip() for x in re.split(r"\s+-\s+|,", item.name) if x.strip()]
+    parts = [x.strip() for x in re.split(r"\s-\s|,", item.name) if x.strip()]
     if not parts:
         return item.name
     if parts[0].lower() in _WEAK_HEADS and len(parts) > 1:

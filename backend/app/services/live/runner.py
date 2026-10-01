@@ -112,10 +112,9 @@ class LiveRunner:
     async def stop(self) -> None:
         if self._task is not None:
             self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
+            # Wait for the loop to finish without swallowing a cancellation
+            # of stop() itself (asyncio.wait never raises the task's error).
+            await asyncio.wait({self._task})
             self._task = None
 
     @property

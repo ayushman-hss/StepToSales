@@ -46,3 +46,31 @@ def test_website_is_revalidated_and_hashed_assets_are_cached(tmp_path, monkeypat
     finally:
         monkeypatch.undo()
         importlib.reload(app.main)
+
+
+def test_locks_keep_up_with_the_requirements():
+    # Docker and CI install the hashed locks, not requirements.txt: a package
+    # added or bumped there must reach the locks too, or the deploy misses it.
+    import re
+    from pathlib import Path
+
+    here = Path(__file__).resolve().parents[1]
+
+    def names(path, pinned_only=False):
+        out = {}
+        for line in (here / path).read_text().splitlines():
+            line = line.split("#", 1)[0].strip()
+            m = re.match(r"([A-Za-z0-9_.-]+)(?:\[[^\]]*\])?\s*(==\s*([^\s;\\]+))?", line)
+            if m and not line.startswith("-"):
+                out[re.sub(r"[-_.]+", "-", m.group(1).lower())] = m.group(3)
+        return out
+
+    app, dev = names("requirements.txt"), names("requirements-dev.txt")
+    lock, dev_lock = names("requirements.lock"), names("requirements-dev.lock")
+    for name, version in app.items():
+        assert lock.get(name) == version, f"{name} in requirements.lock"
+        assert dev_lock.get(name) == version, f"{name} in requirements-dev.lock"
+    for name in dev:
+        assert name in dev_lock, f"{name} in requirements-dev.lock"
+    # Shared packages resolve to the same version in both locks.
+    assert all(dev_lock[n] == v for n, v in lock.items()), "locks disagree"

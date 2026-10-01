@@ -41,8 +41,8 @@ class LiveStatus(BaseModel):
     shop_time: str
     real_time: str
     minutes_ahead: int
-    last_event_at: Optional[str]
-    last_bill_at: Optional[str]
+    last_event_at: Optional[str] = None
+    last_bill_at: Optional[str] = None
     bills_today: int
     visitors_today: int
 

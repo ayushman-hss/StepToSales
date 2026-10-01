@@ -125,11 +125,11 @@ def calibrate(session: Session, store: Store, today: date) -> Calibration:
         by_hour_baskets.setdefault(hour_of[key], []).append(basket)
     for hour, baskets in by_hour_baskets.items():
         if len(baskets) > MAX_BASKETS_PER_HOUR:
-            baskets = rng.sample(baskets, MAX_BASKETS_PER_HOUR)
+            baskets = rng.sample(baskets, MAX_BASKETS_PER_HOUR)  # NOSONAR -- seeded simulation
         cal.baskets[hour] = baskets
     if all_baskets:
         cal.baskets[-1] = (
-            rng.sample(all_baskets, MAX_BASKETS_PER_HOUR)
+            rng.sample(all_baskets, MAX_BASKETS_PER_HOUR)  # NOSONAR -- seeded simulation
             if len(all_baskets) > MAX_BASKETS_PER_HOUR
             else all_baskets
         )

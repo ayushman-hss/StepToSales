@@ -32,7 +32,7 @@ export function ProductsPage() {
     }
   };
 
-  useEffect(() => { load(); }, [storeId]);
+  useEffect(() => { void load(); }, [storeId]);
 
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
