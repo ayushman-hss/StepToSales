@@ -241,12 +241,27 @@ class AlertService:
     def link_url(self, code: str) -> str | None:
         return f"https://t.me/{self.bot_username}?start={code}" if self.bot_username else None
 
-    def link_chat(self, session: Session, code: str, chat: dict) -> Store | None:
-        """Use a link code for this chat. None if the code is wrong or old."""
+    def link_chat(self, session: Session, code: str,
+                  chat: dict) -> tuple[Store, list[Store]] | None:
+        """Use a link code for this chat. None if the code is wrong or old.
+
+        A chat follows one shop at a time: connecting it to a shop moves it
+        there. Returns the shop and the shops it was following before.
+        """
         row = session.get(AlertLinkCode, code)
         if row is None or row.expires_at < utc_now():
             return None
         store = session.get(Store, row.store_id)
+        left = session.exec(
+            select(AlertChat)
+            .where(AlertChat.chat_id == int(chat["id"]))
+            .where(AlertChat.store_id != row.store_id)
+            .order_by(AlertChat.store_id)
+        ).all()
+        before = [session.get(Store, c.store_id) for c in left]
+        hourly = any(c.hourly for c in left)       # moving keeps this setting
+        for c in left:
+            session.delete(c)
         existing = session.exec(
             select(AlertChat)
             .where(AlertChat.store_id == row.store_id)
@@ -254,10 +269,30 @@ class AlertService:
         ).first()
         if existing is None:
             session.add(AlertChat(store_id=row.store_id, chat_id=int(chat["id"]),
-                                  title=_chat_title(chat)))
+                                  title=_chat_title(chat), hourly=hourly))
         session.delete(row)          # one use only
         session.commit()
-        return store
+        return store, before
+
+    def followed_store(self, session: Session, chat_id: int) -> Store | None:
+        """The one shop this chat follows: the last one it was connected to.
+
+        Chats linked before a chat was limited to one shop may still follow
+        several; the older links are dropped here, so the bot never answers
+        for a shop the owner moved away from.
+        """
+        rows = session.exec(
+            select(AlertChat)
+            .where(AlertChat.chat_id == chat_id)
+            .order_by(AlertChat.linked_at.desc(), AlertChat.id.desc())
+        ).all()
+        if not rows:
+            return None
+        for old in rows[1:]:
+            session.delete(old)
+        if len(rows) > 1:
+            session.commit()
+        return session.get(Store, rows[0].store_id)
 
     # ---- the bot --------------------------------------------------------
 
@@ -291,10 +326,18 @@ class AlertService:
 
         with Session(self.engine) as session:
             if command == "/start" and arg.strip():
-                store = self.link_chat(session, arg.strip(), chat)
+                linked = self.link_chat(session, arg.strip(), chat)
+                if linked:
+                    store, before = linked
+                    moved = (
+                        "This chat followed " + ", ".join(s.code for s in before)
+                        + f" until now; it follows only {store.code} from here.\n\n"
+                        if before else ""
+                    )
                 reply = (
-                    f"Connected to {_heading(store)}.\n\n{WHAT_YOU_GET}\n\n{COMMANDS_HELP}"
-                    if store else
+                    f"Connected to {_heading(store)}.\n\n{moved}{WHAT_YOU_GET}"
+                    f"\n\n{COMMANDS_HELP}"
+                    if linked else
                     "That link has expired or was already used. Open Phone alerts "
                     "in StepToSales and tap Connect Telegram again."
                 )
@@ -321,26 +364,18 @@ class AlertService:
         return reply
 
     def _ask(self, session: Session, chat_id: int, text: str) -> str:
-        """A question in plain words, answered for the shop(s) this chat follows."""
-        stores = session.exec(
-            select(Store)
-            .join(AlertChat, AlertChat.store_id == Store.id)
-            .where(AlertChat.chat_id == chat_id)
-            .order_by(Store.code)
-        ).all()
-        if not stores:
+        """A question in plain words, answered for the shop this chat follows."""
+        store = self.followed_store(session, chat_id)
+        if store is None:
             return "This chat isn't connected to a shop yet.\n\n" + HELP
-        parts = []
-        for store in stores:
-            clock = self.shop_clock(store.code) or ist_now()
-            reply = ask_shop(
-                session, store, text, clock,
-                set_hourly=lambda on: self._toggle_hourly(session, chat_id, "on" if on else "off"),
-            )
-            parts.append(f"{_heading(store)}\n{reply}" if len(stores) > 1 else reply)
-        return "\n\n".join(parts)
+        clock = self.shop_clock(store.code) or ist_now()
+        return ask_shop(
+            session, store, text, clock,
+            set_hourly=lambda on: self._toggle_hourly(session, chat_id, "on" if on else "off"),
+        )
 
     def _toggle_hourly(self, session: Session, chat_id: int, arg: str) -> str:
+        self.followed_store(session, chat_id)     # one shop only, see there
         rows = session.exec(select(AlertChat).where(AlertChat.chat_id == chat_id)).all()
         if not rows:
             return "This chat isn't connected to a shop yet.\n\n" + HELP
@@ -357,18 +392,9 @@ class AlertService:
         )
 
     def _status_reply(self, session: Session, chat_id: int) -> str:
-        stores = session.exec(
-            select(Store)
-            .join(AlertChat, AlertChat.store_id == Store.id)
-            .where(AlertChat.chat_id == chat_id)
-            .order_by(Store.code)
-        ).all()
-        if not stores:
+        store = self.followed_store(session, chat_id)
+        if store is None:
             return "This chat isn't connected to a shop yet.\n\n" + HELP
-        parts = []
-        for store in stores:
-            clock = self.shop_clock(store.code) or ist_now()
-            view, totals = today_view(session, store, clock)
-            parts.append(f"{_heading(store)}\n{status_text(view, totals, clock)}")
-        return "\n\n".join(parts)
-
+        clock = self.shop_clock(store.code) or ist_now()
+        view, totals = today_view(session, store, clock)
+        return f"{_heading(store)}\n{status_text(view, totals, clock)}"

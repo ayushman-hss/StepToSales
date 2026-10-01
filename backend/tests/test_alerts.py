@@ -358,6 +358,50 @@ def test_an_expired_code_links_nothing(db, service):
     assert db.exec(select(AlertChat)).all() == []
 
 
+def test_connecting_a_chat_to_another_shop_moves_it(db, service):
+    service.handle_update(message(f"/start {service.new_link_code(db, store(db, 'S1')).code}"))
+    service.handle_update(message("/hourly on"))
+    reply = service.handle_update(
+        message(f"/start {service.new_link_code(db, store(db, 'S2')).code}"))
+    assert reply.startswith("Connected to S2 · Kiosk")
+    assert "followed S1 until now; it follows only S2" in reply
+    chat = db.exec(select(AlertChat)).one()
+    assert (chat.store_id, chat.hourly) == (store(db, "S2").id, True)
+
+
+def test_connecting_the_same_shop_again_says_nothing_about_moving(db, service):
+    service.handle_update(message(f"/start {service.new_link_code(db, store(db, 'S1')).code}"))
+    reply = service.handle_update(
+        message(f"/start {service.new_link_code(db, store(db, 'S1')).code}"))
+    assert "until now" not in reply
+    assert len(db.exec(select(AlertChat)).all()) == 1
+
+
+def test_other_chats_of_the_shop_are_left_alone_when_one_moves(db, service):
+    link(db, "S1", 111)
+    service.handle_update(
+        message(f"/start {service.new_link_code(db, store(db, 'S2')).code}", chat_id=222))
+    assert sorted((c.chat_id, c.store_id) for c in db.exec(select(AlertChat)).all()) == [
+        (111, store(db, "S1").id), (222, store(db, "S2").id)]
+
+
+def test_a_chat_linked_to_two_shops_answers_for_the_newest_only(db, service, monkeypatch):
+    # How a chat could be left by the old rule that let it follow every shop.
+    db.add(AlertChat(store_id=store(db, "S1").id, chat_id=555, title="Owner",
+                     linked_at=utc_now() - timedelta(hours=2)))
+    db.add(AlertChat(store_id=store(db, "S2").id, chat_id=555, title="Owner",
+                     linked_at=utc_now() - timedelta(hours=1)))
+    db.commit()
+    today(db, "S1", range(8, 13), sales=180.0)
+    today(db, "S2", range(8, 13), sales=100.0)
+    monkeypatch.setattr(service, "shop_clock", lambda code: at(12, 40))
+    status = service.handle_update(message("/status"))
+    assert status.startswith("S2 · Kiosk") and "S1" not in status
+    asked = service.handle_update(message("how much did I sell today?"))
+    assert "S1" not in asked and "Kirana" not in asked
+    assert [c.store_id for c in db.exec(select(AlertChat)).all()] == [store(db, "S2").id]
+
+
 def test_status_answers_for_the_linked_shop(db, service, monkeypatch):
     link(db, "S1", 555)
     today(db, "S1", range(8, 13), sales=180.0)
