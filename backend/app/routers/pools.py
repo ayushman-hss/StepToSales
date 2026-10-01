@@ -242,6 +242,7 @@ def close_pool(
     code: str,
     strategy: str = Query("pro_rata"),
     session: Session = Depends(get_session),
+    store: Store = Depends(get_current_store),
 ):
     chosen = _strategy(strategy)
     domain, row = _load(session, code)
@@ -250,7 +251,7 @@ def close_pool(
     except PoolError as exc:
         raise HTTPException(409, str(exc))
 
-    record_event(session, row.id, actor="system", kind="locked")
+    record_event(session, row.id, actor=store.code, kind="locked")
     persist_settlement(session, row, settlement, chosen)
     session.commit()
     return _render(session, code, chosen)
@@ -261,6 +262,7 @@ def reopen_pool(
     code: str,
     strategy: str = Query("pro_rata"),
     session: Session = Depends(get_session),
+    store: Store = Depends(get_current_store),
 ):
     """Demo convenience: put a settled pool back to open and clear its lines."""
     from ..models_pooling import PoolSettlementLine
@@ -274,7 +276,7 @@ def reopen_pool(
     row.settled_at = None
     row.rotation = row.rotation + 1
     session.add(row)
-    record_event(session, row.id, actor="system", kind="reopened")
+    record_event(session, row.id, actor=store.code, kind="reopened")
     session.commit()
     return _render(session, code, _strategy(strategy))
 
