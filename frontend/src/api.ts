@@ -285,6 +285,11 @@ export async function setLiveScenario(scenario: LiveScenario): Promise<LiveStatu
   );
 }
 
+/** Start the shop's day again (demo): today's live bills, visits and alerts go. */
+export async function resetLiveDay(): Promise<LiveStatus> {
+  return poolJson(await apiFetch('/api/live/reset', { method: 'POST' }));
+}
+
 /** One id per bill, made on the phone, so a retried tap is counted once. */
 export function newEventId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto

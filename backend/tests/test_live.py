@@ -18,7 +18,7 @@ from app import models_pooling  # noqa: F401
 from app.db import get_session
 from app.live import runner as app_runner
 from app.main import app
-from app.models import HourlyData, LiveEvent, Product, SaleLine, Store, Upload
+from app.models import AlertSent, HourlyData, LiveEvent, Product, SaleLine, Store, Upload
 from app.services.auth import upsert_user
 from app.services.live.clock import end_of_day, ist_now
 from app.services.live.engine import IncomingEvent, LIVE_UPLOAD, live_upload, record
@@ -530,6 +530,64 @@ def test_dashboard_today_is_the_shops_day_not_the_browsers(client):
     body = res.json()
     assert body["period"]["end"] == app_runner.shop_now("S1").date().isoformat()
     assert body["live"] is not None
+
+
+def test_a_restart_does_not_repeat_event_ids(db, shop):
+    # Every process start re-seeds the generator. Ids must still differ from
+    # the ones recorded before, or those events would be dropped as repeats.
+    cal = calibrate(db, shop, ts(12))
+    yesterday = TODAY - timedelta(days=1)
+    first = simulate(cal, ts(8, day=yesterday), ts(20, day=yesterday), random.Random("s"))
+    again = simulate(cal, ts(8), ts(20), random.Random("s"))
+    assert first and again
+    assert not {e.event_id for e in first} & {e.event_id for e in again}
+
+
+def test_reset_today_starts_the_day_again(client, db, shop):
+    headers = login(client)
+    app_runner.step(now=ist_now())
+    client.post("/api/live/speed", headers=headers, json={"speed": 60})
+    client.post("/api/live/scenario", headers=headers, json={"scenario": "slow"})
+    client.post("/api/live/bill", headers=headers, json={
+        "event_id": "phone-reset-1", "lines": [{"sku": "TEA", "qty": 2}]})
+    client.post("/api/live/bill", headers=login(client, "s2"), json={
+        "event_id": "phone-reset-2", "lines": [{"sku": "COLA", "qty": 1}]})
+    yesterday = TODAY - timedelta(days=1)
+    record(db, shop, [_bill("kept-yesterday", ts(10, day=yesterday))])
+    db.add_all([
+        AlertSent(store_id=shop.id, kind="slow_hour", key=f"{TODAY}T09", text="x",
+                  shop_time=ts(10)),
+        AlertSent(store_id=shop.id, kind="day_summary", key=f"{yesterday}", text="y",
+                  shop_time=ts(22, day=yesterday)),
+    ])
+    db.commit()
+
+    res = client.post("/api/live/reset", headers=headers)
+    assert res.status_code == 200, res.text
+    status = res.json()
+    assert status["speed"] == 1 and status["scenario"] == "normal"
+    assert status["bills_today"] == 0 and status["visitors_today"] == 0
+    assert app_runner.shops["S1"].clock == ts(0)          # replays from midnight
+
+    db.expire_all()
+    mine = db.exec(select(LiveEvent).where(LiveEvent.store_id == shop.id)).all()
+    assert [e.event_id for e in mine] == ["kept-yesterday"]
+    other = db.exec(select(Store).where(Store.code == "S2")).one()
+    assert db.exec(select(LiveEvent).where(LiveEvent.store_id == other.id)).all()
+    up = live_upload(db)
+    today = TODAY.isoformat()
+    for table in (HourlyData, SaleLine):
+        assert not db.exec(select(table).where(table.store_id == shop.id)
+                           .where(table.upload_id == up.id).where(table.date == today)).all()
+    assert [a.key for a in db.exec(select(AlertSent)).all()] == [f"{yesterday}"]
+    # The shop picks the day up again from midnight.
+    for _ in range(12):
+        app_runner.step(now=ist_now())
+    assert app_runner.shops["S1"].clock >= ist_now() - timedelta(minutes=1)
+
+
+def test_reset_needs_a_login(client):
+    assert client.post("/api/live/reset").status_code == 401
 
 
 def test_recorded_lines_are_stored_as_json(db, shop):

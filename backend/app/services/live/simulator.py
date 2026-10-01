@@ -150,8 +150,11 @@ def _poisson(rng: random.Random, lam: float) -> int:
         k += 1
 
 
-def _event_id(rng: random.Random, store_code: str) -> str:
-    return f"sim-{store_code}-{rng.getrandbits(64):016x}"
+def _event_id(rng: random.Random, store_code: str, at: datetime) -> str:
+    # The time is part of the id: every restart re-seeds the generator, so
+    # random bits alone repeat ids from earlier days, and the event store
+    # would silently drop those events as already recorded.
+    return f"sim-{store_code}-{at:%Y%m%d%H%M%S}-{rng.getrandbits(64):016x}"
 
 
 def simulate(
@@ -181,14 +184,14 @@ def simulate(
         times = sorted(t + timedelta(seconds=rng.random() * seconds) for _ in range(arrivals))
         for at in times:
             at = at.replace(microsecond=0)
-            events.append(SimEvent(_event_id(rng, cal.store_code), "visit", at))
+            events.append(SimEvent(_event_id(rng, cal.store_code, at), "visit", at))
             if rng.random() < convert:
                 basket = rng.choice(pool)
                 # A bill takes a moment after walking in, but never spills
                 # into the next hour -- that would move money between hours.
                 paid = min(at + timedelta(seconds=rng.randint(20, 240)),
                            seg_end - timedelta(seconds=1))
-                events.append(SimEvent(_event_id(rng, cal.store_code), "bill", paid, basket))
+                events.append(SimEvent(_event_id(rng, cal.store_code, paid), "bill", paid, basket))
         t = seg_end
 
     events.sort(key=lambda e: e.ts)

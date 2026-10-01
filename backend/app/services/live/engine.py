@@ -134,6 +134,30 @@ def rollup_hour(session: Session, store: Store, upload: Upload, day: str, hour: 
     return row
 
 
+def clear_day(session: Session, store: Store, day: str) -> int:
+    """Remove one day of a shop's live activity: its events and the live rows
+    derived from them. Uploaded history is untouched. Does not commit.
+    Returns how many events were removed."""
+    upload = live_upload(session)
+    events = session.exec(
+        select(LiveEvent).where(LiveEvent.store_id == store.id).where(LiveEvent.date == day)
+    ).all()
+    derived = [
+        *session.exec(
+            select(HourlyData).where(HourlyData.store_id == store.id)
+            .where(HourlyData.upload_id == upload.id).where(HourlyData.date == day)
+        ).all(),
+        *session.exec(
+            select(SaleLine).where(SaleLine.store_id == store.id)
+            .where(SaleLine.upload_id == upload.id).where(SaleLine.date == day)
+        ).all(),
+    ]
+    for row in [*events, *derived]:
+        session.delete(row)
+    session.flush()
+    return len(events)
+
+
 def last_event_time(session: Session, store: Store, kind: str | None = None):
     stmt = select(func.max(LiveEvent.ts)).where(LiveEvent.store_id == store.id)
     if kind:

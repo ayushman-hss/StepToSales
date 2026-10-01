@@ -74,6 +74,11 @@ def starting_clock(session: Session, store: Store, now: datetime) -> datetime:
         # fast-forward left it ahead of the real clock, so no minute is
         # simulated twice.
         return max(last, now - MAX_BACKFILL)
+    return history_end(session, store, now)
+
+
+def history_end(session: Session, store: Store, now: datetime) -> datetime:
+    """Just after the shop's last recorded hour (capped to [now - a week, now])."""
     day = session.exec(
         select(func.max(HourlyData.date)).where(HourlyData.store_id == store.id)
     ).first()
@@ -126,6 +131,35 @@ class LiveRunner:
             await asyncio.sleep(TICK_SECONDS)
 
     # ---- controls -------------------------------------------------------
+
+    def reset_today(self, code: str, clear) -> datetime | None:
+        """Start the shop's day again: ``clear(session, store, day)`` removes
+        today's activity, then the shop resumes from midnight (or from where
+        uploaded history ends, if that is later) at real time, on a usual day.
+        The hours up to now are simply simulated again. Returns the new
+        clock, or None for an unknown shop.
+
+        Holds the tick lock throughout, so no tick can write into the day
+        while it is being cleared.
+        """
+        with self._lock, Session(self.engine) as session:
+            store = session.exec(select(Store).where(Store.code == code)).first()
+            if store is None:
+                return None
+            now = ist_now()
+            day = now.date()
+            clear(session, store, day.isoformat())
+            session.commit()
+            midnight = datetime(day.year, day.month, day.day)
+            clock = max(midnight, history_end(session, store, now))
+            self.shops[code] = ShopState(
+                store_id=store.id,
+                code=code,
+                clock=clock,
+                rng=random.Random(f"{self.seed}:{code}:{now.isoformat()}"),
+                has_events=last_event_time(session, store) is not None,
+            )
+            return clock
 
     def state(self, code: str) -> ShopState | None:
         return self.shops.get(code)

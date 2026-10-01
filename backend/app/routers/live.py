@@ -17,9 +17,9 @@ from sqlmodel import Session, select
 from ..db import get_session
 from ..dependencies import get_current_store
 from ..live import runner
-from ..models import LiveEvent, Product, Store
+from ..models import AlertSent, LiveEvent, Product, Store
 from ..services.live.clock import ist_now
-from ..services.live.engine import IncomingEvent, last_event_time, record
+from ..services.live.engine import IncomingEvent, clear_day, last_event_time, record
 from ..services.live.runner import SCENARIOS, SPEEDS
 from ..services.live.simulator import Line, to_paise
 
@@ -114,6 +114,31 @@ def set_scenario(
         raise HTTPException(400, f"scenario must be one of {list(SCENARIOS)}")
     if runner.set_scenario(store.code, body.scenario) is None:
         raise HTTPException(409, "The live simulator is not running for this shop")
+    return _status(session, store)
+
+
+def _clear_today(session: Session, store: Store, day: str) -> None:
+    clear_day(session, store, day)
+    # Today's alerts go too, so the replayed day can raise them again.
+    # Alert keys start with the day ("2026-09-30" or "2026-09-30T14").
+    for row in session.exec(
+        select(AlertSent).where(AlertSent.store_id == store.id)
+        .where(AlertSent.key.startswith(day))
+    ).all():
+        session.delete(row)
+
+
+@router.post("/reset", response_model=LiveStatus)
+def reset_today(
+    session: Session = Depends(get_session),
+    store: Store = Depends(get_current_store),
+):
+    """Start this shop's day again, for demos: today's live bills, visits and
+    alerts are removed, and the day is replayed from midnight at real time on
+    a usual day. Uploaded history and connected phones are kept."""
+    if runner.reset_today(store.code, _clear_today) is None:
+        raise HTTPException(404, "Unknown shop")
+    session.expire_all()
     return _status(session, store)
 
 
