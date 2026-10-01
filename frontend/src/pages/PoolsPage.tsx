@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Lock, RotateCcw, ScrollText } from 'lucide-react';
 import clsx from 'clsx';
 import {
@@ -27,6 +27,9 @@ import {
 } from '../lib/ui/controls';
 
 const POOL_CODE = 'koramangala';
+/** How often the page asks for other shops' orders. Short enough that an
+ *  order placed on another device shows up while people are still looking. */
+const POOL_REFRESH_MS = 2500;
 
 const STRATEGIES: { value: PoolStrategy; label: string; blurb: string }[] = [
   {
@@ -95,22 +98,87 @@ export function PoolsPage() {
   const [sku, setSku] = useState('');
   const [qty, setQty] = useState(10);
 
+  // Only the newest request may write to the page: a background refresh that
+  // was already on its way when you pressed "Add order" must not land after
+  // the order's own answer and show the old numbers again.
+  const latest = useRef(0);
+  const working = useRef(false);   // one of your own actions is in flight
+  const polling = useRef(false);   // a background refresh is in flight
+  const loaded = useRef(false);
+  const seen = useRef('');         // the last pool shown, to spot a change
+
   const run = useCallback(async (fn: () => Promise<PoolDetail>) => {
+    const id = ++latest.current;
+    working.current = true;
     try {
       setBusy(true);
       setError(null);
-      setPool(await fn());
-      setEvents(await fetchPoolEvents(POOL_CODE));
+      const next = await fn();
+      if (id === latest.current) {
+        setPool(next);
+        seen.current = JSON.stringify(next);
+        loaded.current = true;
+      }
+      const log = await fetchPoolEvents(POOL_CODE);
+      if (id === latest.current) setEvents(log);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      if (id === latest.current) {
+        setError(e instanceof Error ? e.message : 'Something went wrong');
+      }
     } finally {
-      setBusy(false);
+      if (id === latest.current) {
+        working.current = false;
+        setBusy(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     run(() => fetchPool(POOL_CODE, strategy));
   }, [strategy, run]);
+
+  // Live: other shops order from their own devices, so keep asking. Quiet --
+  // no spinner, and a missed refresh leaves what is on screen as it was.
+  const refresh = useCallback(async () => {
+    if (working.current || polling.current || document.hidden) return;
+    polling.current = true;
+    const id = ++latest.current;
+    try {
+      const next = await fetchPool(POOL_CODE, strategy);
+      const key = JSON.stringify(next);
+      // Nothing new from the other shops: leave the page alone, and skip the
+      // second request. The record is fetched only when something changed.
+      const changed = key !== seen.current;
+      const log = changed ? await fetchPoolEvents(POOL_CODE) : null;
+      if (id === latest.current) {
+        if (changed) {
+          setPool(next);
+          if (log) setEvents(log);
+          seen.current = key;
+        }
+        // The first load may have failed (a server waking up): this recovers it.
+        if (!loaded.current) setError(null);
+        loaded.current = true;
+      }
+    } catch {
+      /* the next tick tries again */
+    } finally {
+      polling.current = false;
+    }
+  }, [strategy]);
+
+  useEffect(() => {
+    const id = window.setInterval(refresh, POOL_REFRESH_MS);
+    // Back on this tab (a phone unlocked, say): catch up straight away.
+    const onVisible = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [refresh]);
 
   const frozen = pool ? pool.status !== 'open' : false;
   const active = STRATEGIES.find((s) => s.value === strategy)!;
@@ -138,6 +206,7 @@ export function PoolsPage() {
                 <p className="mt-1 text-small text-muted">
                   {pool.stores.length} shops&nbsp;&nbsp; {pool.products.length} products
                   {pool.rotation > 0 && <>&nbsp;&nbsp; round {pool.rotation + 1}</>}
+                  &nbsp;&nbsp; updates by itself when another shop orders
                 </p>
               </div>
 
