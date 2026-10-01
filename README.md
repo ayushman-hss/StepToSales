@@ -1,6 +1,6 @@
 # StepToSales
 
-[![codecov](https://codecov.io/github/ayushman-hss/StepToSale/graph/badge.svg?token=JQS7H5KRVD)](https://codecov.io/github/ayushman-hss/StepToSale)
+[![codecov](https://codecov.io/github/ayushman-hss/StepToSales/graph/badge.svg?token=JQS7H5KRVD)](https://codecov.io/github/ayushman-hss/StepToSales)
 
 **Retail analytics for small neighbourhood shops.**
 
