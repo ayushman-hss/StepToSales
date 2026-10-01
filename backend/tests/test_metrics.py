@@ -1,4 +1,6 @@
 """Dashboard aggregation: an average day, never a total dressed up as one."""
+from datetime import date, timedelta
+
 import pandas as pd
 
 from app.services.insights import generate_insights, whatsapp_summary
@@ -91,66 +93,154 @@ class TestCompleteDays:
         assert means[0] == 14 * 10  # the full Monday, not averaged with 10
 
 
-class TestInsightWording:
-    def test_best_hour_ignores_a_single_visitor(self):
-        rows = day("2026-09-21", [8], footfall=1, transactions=1)  # "100%"
-        rows += day("2026-09-21", [9, 10], footfall=20, transactions=10)
-        rows += day("2026-09-21", [11], footfall=20, transactions=8)
-        texts = " ".join(i["text"] for i in generate_insights(frame(rows)))
-        assert "100.0%" not in texts
+def texts(insights):
+    return " ".join(i["text"] for i in insights)
 
-    def test_one_person_is_singular(self):
-        rows = day("2026-09-21", [9], footfall=10, transactions=2)
-        rows += day("2026-09-21", [10], footfall=3, transactions=3)  # best, 3 visitors
-        rows += [("2026-09-21", 11, 1, 1, 50.0)]
-        texts = " ".join(i["text"] for i in generate_insights(frame(rows)))
-        assert "1 people" not in texts
 
-    def test_week_projection_only_from_several_complete_days(self):
-        one = frame(day("2026-09-20", range(8, 22)))
-        assert "a week" not in " ".join(i["text"] for i in generate_insights(one))
-        assert "day like this" in " ".join(i["text"] for i in generate_insights(one))
+def weeks(start_day, n_days, hours, footfall=10, transactions=5, sales=500.0):
+    """n_days consecutive days from 2026-08-31 + start_day (a Monday)."""
+    out = []
+    for d in range(start_day, start_day + n_days):
+        stamp = (date(2026, 8, 31) + timedelta(days=d)).isoformat()
+        out += day(stamp, hours, footfall, transactions, sales)
+    return out
 
-    def test_a_partial_day_never_projects(self):
-        df = frame(day("2026-09-21", range(8, 12)))
-        texts = " ".join(i["text"] for i in generate_insights(df, "2026-09-21"))
-        assert "so far" in texts and "a week" not in texts
 
-    def test_multi_day_hours_say_average_day(self):
-        df = frame(
-            day("2026-09-14", [9], footfall=30, transactions=5)
-            + day("2026-09-15", [9], footfall=30, transactions=5)
-            + day("2026-09-14", [10], footfall=5, transactions=4)
-            + day("2026-09-15", [10], footfall=5, transactions=4)
-        )
-        assert "on an average day" in " ".join(i["text"] for i in generate_insights(df))
+class TestVersusBefore:
+    def test_names_fewer_visitors_as_the_cause(self):
+        before = frame(weeks(0, 7, range(8, 20), footfall=20, transactions=10))
+        now = frame(weeks(7, 7, range(8, 20), footfall=15, transactions=7.5, sales=375.0))
+        ins = generate_insights(now, previous=before, previous_label="the week before")
+        first = ins[0]
+        assert first["kind"] == "warning"
+        assert first["text"].startswith("Takings are down 25% on the week before")
+        assert "fewer people came in" in first["text"]
+        assert "The rest barely moved" in first["text"] and "at the door" in first["text"]
+
+    def test_names_a_smaller_share_buying_as_the_cause(self):
+        before = frame(weeks(0, 7, range(8, 20), footfall=20, transactions=10))
+        now = frame(weeks(7, 7, range(8, 20), footfall=20, transactions=7, sales=350.0))
+        first = generate_insights(now, previous=before, previous_label="the week before")[0]
+        assert "smaller share of visitors bought: 35% against 50%" in first["text"]
+        assert "empty shelves" in first["text"]
+
+    def test_a_good_period_is_a_win_without_advice(self):
+        before = frame(weeks(0, 7, range(8, 20), footfall=20, transactions=10))
+        now = frame(weeks(7, 7, range(8, 20), footfall=20, transactions=10, sales=650.0))
+        first = generate_insights(now, previous=before, previous_label="the week before")[0]
+        assert first["kind"] == "win" and "average bill" in first["text"]
+        assert "check" not in first["text"].lower()
+
+    def test_one_quiet_day_is_within_normal_ups_and_downs(self):
+        # 30 bills a day: a 10% dip is well inside what chance alone gives.
+        before = frame(day("2026-09-14", range(8, 14), footfall=10, transactions=5))
+        now = frame(day("2026-09-21", range(8, 14), footfall=9, transactions=5, sales=450.0))
+        first = generate_insights(now, previous=before, previous_label="last Monday")[0]
+        assert first["kind"] == "observation"
+        assert "about the same as last Monday" in first["text"]
+        assert "ups and downs" in first["text"]
+
+    def test_no_comparison_without_an_earlier_period(self):
+        now = frame(weeks(0, 7, range(8, 20)))
+        assert "Takings" not in texts(generate_insights(now))
+
+
+class TestRush:
+    def shop(self, rush_bills, calm_bills, n_days=14):
+        rows = []
+        for d in range(n_days):
+            stamp = (date(2026, 8, 31) + timedelta(days=d)).isoformat()
+            rows += day(stamp, [8, 9, 18, 19], footfall=40, transactions=rush_bills)
+            rows += day(stamp, [11, 12, 13, 14, 15, 16], footfall=10, transactions=calm_bills)
+        return frame(rows)
+
+    def test_names_the_rush_hours(self):
+        out = texts(generate_insights(self.shop(rush_bills=20, calm_bills=5)))
+        assert "Your rushes are 8:00–10:00 and 18:00–20:00" in out
+        assert "Restock and be at the counter before 8:00 and 18:00" in out
+
+    def test_a_rush_that_loses_buyers_is_priced(self):
+        ins = generate_insights(self.shop(rush_bills=12, calm_bills=6))  # 30% vs 60%
+        card = next(i for i in ins if "rush" in i["text"])
+        assert card["kind"] == "warning"
+        assert "only 30% of them buy, against 60% in calmer hours" in card["text"]
+        assert "a day" in card["text"] and "a week" in card["text"]
+
+    def test_a_small_gap_chance_explains_is_not_priced(self):
+        # Three days, few calm visitors: a few points' gap could be luck.
+        ins = generate_insights(self.shop(rush_bills=19, calm_bills=5, n_days=3))
+        assert "calmer hours" not in texts(ins)
+
+    def test_one_day_is_too_short_to_call_a_rush(self):
+        one = self.shop(rush_bills=20, calm_bills=5, n_days=1)
+        assert "rush" not in texts(generate_insights(one))
+
+    def test_one_day_borrows_the_usual_rush_from_recent_weeks(self):
+        one = frame(day("2026-09-21", range(8, 12)))
+        out = texts(generate_insights(one, history=self.shop(rush_bills=20, calm_bills=5)))
+        assert "On a usual day, your rushes are 8:00–10:00 and 18:00–20:00" in out
+
+
+class TestQuietWeekday:
+    def shop(self, sunday_footfall, sunday_bills, n_weeks=2):
+        rows = []
+        for d in range(7 * n_weeks):
+            stamp = (date(2026, 8, 31) + timedelta(days=d)).isoformat()
+            sunday = d % 7 == 6
+            bills = sunday_bills if sunday else 10
+            rows += day(stamp, range(8, 20),
+                        footfall=sunday_footfall if sunday else 20,
+                        transactions=bills, sales=bills * 50.0)
+        return frame(rows)
+
+    def test_few_visitors_is_the_door_not_the_counter(self):
+        card = next(i for i in generate_insights(self.shop(8, 4)) if "Sundays" in i["text"])
+        assert card["kind"] == "observation"
+        assert "fewer people come in" in card["text"] and "shorter hours" in card["text"]
+
+    def test_visitors_who_do_not_buy_is_the_counter(self):
+        card = next(i for i in generate_insights(self.shop(20, 4)) if "Sundays" in i["text"])
+        assert card["kind"] == "warning"
+        assert "only 20% buy against 50%" in card["text"]
+
+    def test_needs_every_weekday_twice(self):
+        assert "Sundays" not in texts(generate_insights(self.shop(8, 4, n_weeks=1)))
+
+
+class TestBillByTime:
+    def test_bigger_evening_bills_are_pointed_out(self):
+        rows = weeks(0, 7, [8, 9, 10], footfall=10, transactions=5, sales=250.0)    # ₹50 bills
+        rows += weeks(0, 7, [18, 19, 20], footfall=10, transactions=5, sales=600.0)  # ₹120 bills
+        out = texts(generate_insights(frame(rows)))
+        assert "Evening bills average ₹120" in out and "morning bills" in out
+
+    def test_similar_bills_say_nothing(self):
+        rows = weeks(0, 7, [8, 9, 10, 18, 19, 20])
+        assert "bills average" not in texts(generate_insights(frame(rows)))
+
+
+class TestInsightLimits:
+    def test_at_most_four_cards(self):
+        before = frame(weeks(0, 14, range(8, 20), footfall=30, transactions=15))
+        rows = []
+        for d in range(14, 28):
+            stamp = (date(2026, 8, 31) + timedelta(days=d)).isoformat()
+            sunday = d % 7 == 6
+            rows += day(stamp, [8, 9], footfall=60 if not sunday else 10, transactions=12, sales=600.0)
+            rows += day(stamp, [12, 13, 14, 15, 16], footfall=10, transactions=6, sales=1200.0)
+            rows += day(stamp, [18, 19], footfall=60 if not sunday else 10, transactions=12, sales=2400.0)
+        ins = generate_insights(frame(rows), previous=before, previous_label="the fortnight before")
+        assert 1 <= len(ins) <= 4
+
+    def test_nothing_from_nothing(self):
+        assert generate_insights(frame(day("2026-09-21", [9], footfall=0, transactions=0, sales=0))) == []
 
     def test_whatsapp_uses_the_given_title(self):
         msg = whatsapp_summary(frame(day("2026-09-21", [9, 10])), "Summary for Mon 21 Sep so far")
         assert msg.splitlines()[0] == "📊 *Summary for Mon 21 Sep so far*"
         assert "Daily" not in msg
 
-
-class TestInsightConsistency:
-    """Nothing the insights say may contradict the dashboard headline."""
-
-    def test_best_hour_is_only_named_when_it_beats_the_average(self):
-        # Busy hours convert worse than quiet ones, as they do in real shops.
-        rows = day("2026-09-21", [9], footfall=40, transactions=12)   # 30%
-        rows += day("2026-09-21", [18], footfall=40, transactions=13)  # 32.5%
-        rows += day("2026-09-21", [14], footfall=2, transactions=2)    # 100%, tiny
-        df = frame(rows)
-        texts = " ".join(i["text"] for i in generate_insights(df))
-        overall = 27 / 82
-        assert "your best hour" not in texts, (
-            f"named a best hour although no busy hour beats {overall:.1%}"
-        )
-
-    def test_average_quoted_is_the_headline_rate(self):
-        rows = day("2026-09-21", [9], footfall=100, transactions=10)   # busy, 10%
-        rows += day("2026-09-21", [10], footfall=40, transactions=20)  # 50%
-        rows += day("2026-09-21", [11], footfall=40, transactions=20)
-        df = frame(rows)
-        headline = 50 / 180 * 100
-        warning = next(i["text"] for i in generate_insights(df) if i["kind"] == "warning")
-        assert f"{headline:.1f}% average" in warning
+    def test_whatsapp_repeats_the_dashboard_cards(self):
+        cards = [{"kind": "win", "text": "Takings are up."}]
+        msg = whatsapp_summary(frame(day("2026-09-21", [9, 10])), "Summary", None, cards)
+        assert msg.endswith("✅ Takings are up.")

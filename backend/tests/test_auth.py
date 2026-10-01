@@ -296,6 +296,41 @@ def test_naming_another_shop_in_the_url_changes_nothing(client, asked_for):
     assert res.json()["kpis"]["total_footfall"] == 60
 
 
+def _day(db, code, day, hours, footfall):
+    shop = db.exec(select(Store).where(Store.code == code)).one()
+    upload = db.exec(select(Upload)).first()
+    db.add_all([
+        HourlyData(store_id=shop.id, upload_id=upload.id, date=day, hour=h,
+                   footfall=footfall, transactions=footfall // 2, sales=100.0 * footfall)
+        for h in hours
+    ])
+    db.commit()
+
+
+def test_one_day_is_compared_with_the_same_weekday_before(client, db):
+    _day(db, "S1", "2026-09-08", (9, 10, 11), 30)        # Tuesday after 1 Sep
+    res = client.get("/api/dashboard", headers=login(client),
+                     params={"start_date": "2026-09-08", "end_date": "2026-09-08"})
+    first = res.json()["insights"][0]
+    assert first["kind"] == "win"
+    assert first["text"].startswith("Takings are up 200% on last Tuesday")
+    # The forwarded message repeats the page's cards.
+    assert first["text"] in res.json()["whatsapp"]
+
+
+def test_a_day_in_progress_is_compared_at_the_same_time(client, db):
+    _day(db, "S1", "2026-09-08", (9, 10, 11), 40)
+    _day(db, "S1", "2026-09-15", (9, 10), 120)           # 10:00 still going
+    res = client.get("/api/dashboard", headers=login(client),
+                     params={"start_date": "2026-09-15", "end_date": "2026-09-15"})
+    body = res.json()
+    assert body["period"]["partial"] is True
+    first = body["insights"][0]["text"]
+    # Judged on 9:00 only: half of 10:00 must not look like a slow hour.
+    assert "on last Tuesday at this time (₹12,000 against ₹4,000)" in first
+    assert body["kpis"]["total_footfall"] == 240          # the headline keeps every hour
+
+
 def test_stores_lists_only_my_shop(client):
     res = client.get("/api/stores", headers=login(client, "s2"))
     assert res.json() == [{"code": "S2", "name": "Kiosk"}]

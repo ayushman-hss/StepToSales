@@ -165,19 +165,78 @@ def get_dashboard(
     partial_date = _partial_date(session, store_code, df)
     period = _period(df, partial_date)
     title = f"Summary for {period.label}"
+    now, previous, label = _before(session, store_code, df, period, all_time=not start_date)
+    history = _recent(session, store_code, period)
+    insights = generate_insights(now, partial_date, previous, label, history)
 
     return DashboardResponse(
         kpis=compute_kpis(df),
         hourly=hourly_series(df),
         daily=daily_series(df),
         heatmap=heatmap_series(df),
-        insights=generate_insights(df, partial_date),
-        whatsapp=whatsapp_summary(df, title, partial_date),
+        insights=insights,
+        whatsapp=whatsapp_summary(df, title, partial_date, insights),
         period=period,
         data_through=_data_through(session, store_code),
         compare=_compare(session, store_code, df, period),
         live=_live(session, store_code, df, period, runner.shop_now(store_code)),
     )
+
+
+def _before(
+    session: Session,
+    store_code: str,
+    df: pd.DataFrame,
+    period: Period,
+    all_time: bool,
+) -> tuple[pd.DataFrame, Optional[pd.DataFrame], str]:
+    """The span to compare with, for the "how did it go" insight.
+
+    One day: the same weekday a week earlier. If the day is still going, both
+    are cut at the last finished hour, so a half-done hour never looks slow.
+    Several days: the same number of days just before. "All" has nothing
+    before it. Returns the frame to judge (maybe cut), the earlier one, and
+    how to name it.
+    """
+    start, end = date.fromisoformat(period.start), date.fromisoformat(period.end)
+    if all_time:
+        return df, None, ""
+    if start == end:
+        prior = start - timedelta(days=7)
+        prev = _load_df(session, store_code, prior.isoformat(), prior.isoformat())
+        name = f"last {DAY_NAMES[prior.weekday()]}"
+        if not period.partial:
+            return df, prev, name
+        through = int(df["hour"].max())        # the hour still in progress
+        now = df[df["hour"] < through]
+        if now.empty or prev.empty:
+            return df, None, ""
+        return now, prev[prev["hour"] < through], f"{name} at this time"
+    days = (end - start).days + 1
+    prev = _load_df(session, store_code,
+                    (start - timedelta(days=days)).isoformat(),
+                    (start - timedelta(days=1)).isoformat())
+    if prev.empty or int(prev["date"].nunique()) < days:
+        return df, None, ""                    # history does not reach back that far
+    name = {7: "the week before", 14: "the fortnight before",
+            28: "the 4 weeks before"}.get(days, f"the {days} days before")
+    return df, prev, name
+
+
+#: Recent days that show the shop's usual pattern behind a single day.
+PATTERN_DAYS = 28
+
+
+def _recent(session: Session, store_code: str, period: Period) -> Optional[pd.DataFrame]:
+    """The four weeks before a one-day range; None for longer ranges, which
+    show their own pattern."""
+    if period.start != period.end:
+        return None
+    day = date.fromisoformat(period.start)
+    df = _load_df(session, store_code,
+                  (day - timedelta(days=PATTERN_DAYS)).isoformat(),
+                  (day - timedelta(days=1)).isoformat())
+    return df if not df.empty else None
 
 
 #: How far back "a usual Wednesday" looks.

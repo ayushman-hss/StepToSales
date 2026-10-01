@@ -802,11 +802,6 @@ def advice(shop: Shop) -> list[str]:
                     f"only {_n(t.loc[sku, 'qty'])} this week. Put it near the counter or "
                     "suggest it at billing.")
 
-    # 6. Bigger bills.
-    if not d.empty:
-        tips += [i["text"] for i in generate_insights(d.assign(store_id=shop.store.code),
-                                                      today.isoformat())
-                 if i["kind"] == "observation" and "Average bill" in i["text"]]
     seen, out = set(), []
     for tip in tips:
         if tip not in seen:
