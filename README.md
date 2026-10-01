@@ -1154,7 +1154,7 @@ pip install -r requirements-dev.txt
 python -m pytest tests/ -q
 ```
 
-The current suite contains **450 tests** covering areas including:
+The current suite contains **453 tests** covering areas including:
 
 - Supplier tiers
 - Pool lifecycle
