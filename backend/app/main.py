@@ -59,8 +59,24 @@ app.include_router(pools.router)
 
 
 # ---- the website, when this process serves it too -------------------------------
+#: The build's /assets files have a content hash in their names, so a browser
+#: may keep them forever. Everything else -- index.html above all -- must be
+#: checked on every visit, or a browser keeps showing the old app after a
+#: deploy (index.html had no cache header, and browsers guessed a lifetime).
+IMMUTABLE = "public, max-age=31536000, immutable"
+REVALIDATE = "no-cache"
+
+
+class HashedAssets(StaticFiles):
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = IMMUTABLE
+        return response
+
+
 if STATIC is not None and (STATIC / "index.html").is_file():
-    app.mount("/assets", StaticFiles(directory=STATIC / "assets"), name="assets")
+    app.mount("/assets", HashedAssets(directory=STATIC / "assets"), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
     def website(path: str):
@@ -70,5 +86,5 @@ if STATIC is not None and (STATIC / "index.html").is_file():
             raise HTTPException(404, "Not found")
         file = (STATIC / path).resolve()
         if path and file.is_file() and STATIC.resolve() in file.parents:
-            return FileResponse(file)
-        return FileResponse(STATIC / "index.html")
+            return FileResponse(file, headers={"Cache-Control": REVALIDATE})
+        return FileResponse(STATIC / "index.html", headers={"Cache-Control": REVALIDATE})
